@@ -564,8 +564,9 @@ class TerminalViewState extends State<TerminalView> {
 
   void _indexTerminalLines(List<LogEntry> logs) {
     if (identical(_terminalLinesSource, logs) &&
-        _terminalLinesVersion == widget.logVersion)
+        _terminalLinesVersion == widget.logVersion) {
       return;
+    }
 
     // Snapshots share unchanged immutable LogEntry objects. Verify the whole
     // common prefix: a replacement or trimmed history must never reuse stale

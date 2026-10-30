@@ -659,7 +659,10 @@ extension _ScriptListActions on _ScriptListPageState {
           ),
         ],
       ),
-    ).whenComplete(controller.dispose);
+    ).whenComplete(() {
+      // The dialog's reverse transition can still reference the text field.
+      Future<void>.delayed(const Duration(milliseconds: 500), controller.dispose);
+    });
   }
 
   void _importScript() async {

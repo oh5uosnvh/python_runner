@@ -181,9 +181,7 @@ class _ScriptListPageState extends ConsumerState<ScriptListPage> {
             contentPadding: EdgeInsets.zero,
           ),
         ),
-        // Groups and projects are root-level items.  Do not expose these
-        // actions inside an ordinary group: this app has no nested-group
-        // semantics, so creating one here must never appear to nest it.
+        // Groups and projects cannot be nested.
         if (_activeGroupId == null) ...[
           PopupMenuItem(
             value: 'add_group',
@@ -477,19 +475,10 @@ class _ScriptListPageState extends ConsumerState<ScriptListPage> {
                                       _activeGroupName ?? l10n.group),
                                   style: _maskedNameStyle,
                                 ),
-                          actions: _activeGroupId == null
-                              ? [
-                                  _buildScriptNameVisibilityButton(),
-                                  _buildScriptMenu(),
-                                ]
-                              : [
-                                  _buildScriptNameVisibilityButton(),
-                                  // Keep the group page's overflow affordance
-                                  // identical to the root workspace. Actions
-                                  // that create groups/projects remain hidden
-                                  // there because groups are not nestable.
-                                  _buildScriptMenu(),
-                                ],
+                          actions: [
+                            _buildScriptNameVisibilityButton(),
+                            _buildScriptMenu(),
+                          ],
                         ),
       body: Column(
         children: [

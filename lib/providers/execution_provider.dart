@@ -30,6 +30,7 @@ class ScriptLogRecord {
   bool waitingForInput = false;
   String inputPrompt = '';
   int droppedLogCount = 0;
+  int revision = 0;
 
   ScriptLogRecord({
     required this.executionId,
@@ -53,6 +54,7 @@ class ScriptLogRecord {
       droppedLogCount += removed;
     }
     _logsSnapshot = null;
+    revision++;
     return removed;
   }
 
@@ -60,6 +62,7 @@ class ScriptLogRecord {
     if (_logs.isEmpty) return;
     _logs[_logs.length - 1] = entry;
     _logsSnapshot = null;
+    revision++;
   }
 
   bool get hasLogs => _logs.isNotEmpty;
@@ -155,6 +158,12 @@ class ExecutionProvider extends ChangeNotifier {
   }
 
   int get logVersion => _logVersion;
+
+  int logVersionForScript(String scriptName) =>
+      (activeRecordForScript(scriptName) ??
+              latestHistoryRecordForScript(scriptName))
+          ?.revision ??
+      0;
   String? get currentScriptName => _currentScriptName;
   bool get isRunning =>
       _state.status == ExecutionStatus.running ||
@@ -394,8 +403,9 @@ class ExecutionProvider extends ChangeNotifier {
   /// Multiple rapid updates within [notifyDelay] are coalesced into one.
   void _scheduleNotify() {
     if (_disposed) return;
-    _notifyTimer?.cancel();
+    if (_notifyTimer?.isActive ?? false) return;
     _notifyTimer = Timer(_notifyDelay, () {
+      _notifyTimer = null;
       if (!_disposed) {
         notifyListeners();
       }
@@ -493,7 +503,11 @@ class ExecutionProvider extends ChangeNotifier {
 
   void _trimHistoryRecords() {
     while (_logHistory.length > maxHistoryRecords) {
-      final removed = _logHistory.removeAt(0);
+      final index = _logHistory.indexWhere((record) =>
+          record.status != ExecutionStatus.running &&
+          record.status != ExecutionStatus.stopping);
+      if (index < 0) return; // Never evict a live task's log record.
+      final removed = _logHistory.removeAt(index);
       _historyByExecutionId.remove(removed.executionId);
     }
   }
@@ -900,6 +914,7 @@ class ExecutionProvider extends ChangeNotifier {
     if (record == null) return;
     record._logs.clear();
     record._logsSnapshot = null;
+    record.revision++;
     notifyListeners();
   }
 

@@ -46,6 +46,32 @@ void main() {
     await tester.pump(const Duration(milliseconds: 600));
   });
 
+  testWidgets('log revision increases after the bounded buffer is full',
+      (tester) async {
+    final bridge = _ExecutionBridgeFake();
+    final provider = ExecutionProvider(bridge);
+    await provider.executeScript('demo.py');
+    for (var i = 0; i < ExecutionProvider.maxLogsPerHistoryRecord; i++) {
+      bridge.emitLog(
+        type: 'stdout',
+        content: 'line $i',
+        timestamp: DateTime(2026, 1, 1).add(Duration(milliseconds: i)),
+      );
+    }
+    await tester.pump(const Duration(milliseconds: 150));
+    final before = provider.logVersionForScript('demo.py');
+    bridge.emitLog(
+      type: 'stdout',
+      content: 'new line after limit',
+      timestamp: DateTime(2026, 1, 2),
+    );
+    await tester.pump(const Duration(milliseconds: 150));
+    expect(provider.logVersionForScript('demo.py'), greaterThan(before));
+    expect(provider.logsForScript('demo.py').last.content, 'new line after limit');
+    provider.dispose();
+    await tester.pump(const Duration(milliseconds: 600));
+  });
+
   testWidgets('execution provider keeps old current-log snapshots stable',
       (tester) async {
     final bridge = _ExecutionBridgeFake();

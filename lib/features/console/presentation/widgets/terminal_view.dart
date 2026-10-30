@@ -137,9 +137,14 @@ class TerminalViewState extends State<TerminalView> {
     _lastLogVersion = widget.logVersion;
     _lastLogTailSignature = _logTailSignature(widget.logs);
     _scrollController.addListener(_onScroll);
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => _syncUnreadOutputWithViewport(),
-    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_autoScroll) {
+        _scrollToBottom(force: true);
+      } else {
+        _syncUnreadOutputWithViewport();
+      }
+    });
     _loadDisplayPreferences();
   }
 
@@ -329,6 +334,7 @@ class TerminalViewState extends State<TerminalView> {
 
   void _scrollToBottom({bool force = false}) {
     final request = ++_scrollRequest;
+    var attempts = 0;
     void jumpAfterLayout(Duration _) {
       if (!mounted ||
           !_scrollController.hasClients ||
@@ -338,6 +344,7 @@ class TerminalViewState extends State<TerminalView> {
       if (!force && !_autoScroll) return;
       if (_scrollController.position.extentAfter <= 0.5) return;
       _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+      if (++attempts >= 20) return;
       // Virtualized wrapped rows refine the estimated extent after each jump.
       // Continue until the actual tail is visible; top/manual scrolling cancels.
       WidgetsBinding.instance.addPostFrameCallback(jumpAfterLayout);

@@ -9,6 +9,19 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
+  testWidgets('auto-follow opens existing output at the latest line',
+      (tester) async {
+    await tester.pumpWidget(_app(TerminalView(logs: _logs(400))));
+    await tester.pumpAndSettle();
+    expect(_position(tester).extentAfter, lessThan(2));
+    expect(
+      find.byWidgetPredicate((widget) =>
+          widget is Text &&
+          widget.textSpan?.toPlainText().contains('line 399') == true),
+      findsOneWidget,
+    );
+  });
+
   testWidgets(
     'bottom reaches the last virtualized line with varying row heights',
     (tester) async {

@@ -268,12 +268,6 @@ class _ScriptGridCard extends StatelessWidget {
           onLongPress: onLongPress,
           child: Stack(
             children: [
-              if (isRunning)
-                const Positioned(
-                  left: 8,
-                  top: 8,
-                  child: _RunningScriptDot(),
-                ),
               Padding(
                 padding: const EdgeInsets.all(12),
                 child: Column(
@@ -332,12 +326,14 @@ class _ScriptGridCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 5),
-                    Text(
-                      runLabel,
-                      style: TextStyle(fontSize: 11, color: colors.primary),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                    isRunning
+                        ? _RunningStatusChip(colors: colors)
+                        : Text(
+                            runLabel,
+                            style: TextStyle(fontSize: 11, color: colors.primary),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                   ],
                 ),
               ),
@@ -864,37 +860,37 @@ class _PinnedBadge extends StatelessWidget {
   }
 }
 
-class _ScriptRunningDot extends StatelessWidget {
-  final String scriptName;
-  const _ScriptRunningDot(this.scriptName);
+class _RunningStatusChip extends StatelessWidget {
+  final ColorScheme colors;
+  const _RunningStatusChip({required this.colors});
 
   @override
   Widget build(BuildContext context) {
-    final running = legacy_provider.Provider.of<ExecutionProvider>(context)
-        .isScriptRunning(scriptName);
-    return running ? const _RunningScriptDot() : const SizedBox.shrink();
-  }
-}
-
-class _RunningScriptDot extends StatelessWidget {
-  const _RunningScriptDot();
-
-  @override
-  Widget build(BuildContext context) => Container(
-        width: 10,
-        height: 10,
-        decoration: BoxDecoration(
-          color: Colors.greenAccent,
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.greenAccent.withValues(alpha: 0.72),
-              blurRadius: 5,
-              spreadRadius: 1,
+    final green = Colors.green.shade400;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+      decoration: BoxDecoration(
+        color: green.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(7),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.play_circle_outline_rounded, size: 14, color: green),
+          const SizedBox(width: 4),
+          Text(
+            AppLocalizations.of(context)!.running,
+            style: TextStyle(
+              fontSize: 11,
+              height: 1,
+              fontWeight: FontWeight.w700,
+              color: green,
             ),
-          ],
-        ),
-      );
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _QuickRunButton extends StatefulWidget {

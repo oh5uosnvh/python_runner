@@ -231,20 +231,10 @@ extension _ScriptListContent on _ScriptListPageState {
                           ),
                         )
                       else
-                        Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            _ScriptIcon(
-                              colors: colors,
-                              size: 44,
-                              pinned: script.isPinned,
-                            ),
-                            Positioned(
-                              left: -3,
-                              top: -3,
-                              child: _ScriptRunningDot(script.name),
-                            ),
-                          ],
+                        _ScriptIcon(
+                          colors: colors,
+                          size: 44,
+                          pinned: script.isPinned,
                         ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -268,11 +258,14 @@ extension _ScriptListContent on _ScriptListPageState {
                                   icon: Icons.schedule_rounded,
                                   label: _dateFormat.format(script.modifiedAt),
                                 ),
-                                _ScriptMetaChip(
-                                  colors: colors,
-                                  icon: Icons.play_circle_outline_rounded,
-                                  label: _formatRunLabel(script.runCount),
-                                ),
+                                legacy_provider.Provider.of<ExecutionProvider>(context)
+                                        .isScriptRunning(script.name)
+                                    ? _RunningStatusChip(colors: colors)
+                                    : _ScriptMetaChip(
+                                        colors: colors,
+                                        icon: Icons.play_circle_outline_rounded,
+                                        label: _formatRunLabel(script.runCount),
+                                      ),
                               ],
                             ),
                           ],
@@ -466,18 +459,8 @@ extension _ScriptListContent on _ScriptListPageState {
                           colors.onSurfaceVariant,
                         ),
                       ),
-                    Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        _ScriptIcon(
-                            colors: colors, size: 44, pinned: script.isPinned),
-                        Positioned(
-                          left: -3,
-                          top: -3,
-                          child: _ScriptRunningDot(script.name),
-                        ),
-                      ],
-                    ),
+                    _ScriptIcon(
+                        colors: colors, size: 44, pinned: script.isPinned),
                   ],
                   const SizedBox(width: 12),
                   Expanded(
@@ -512,11 +495,14 @@ extension _ScriptListContent on _ScriptListPageState {
                               icon: Icons.schedule_rounded,
                               label: _dateFormat.format(script.modifiedAt),
                             ),
-                            _ScriptMetaChip(
-                              colors: colors,
-                              icon: Icons.play_circle_outline_rounded,
-                              label: _formatRunLabel(script.runCount),
-                            ),
+                            legacy_provider.Provider.of<ExecutionProvider>(context)
+                                    .isScriptRunning(script.name)
+                                ? _RunningStatusChip(colors: colors)
+                                : _ScriptMetaChip(
+                                    colors: colors,
+                                    icon: Icons.play_circle_outline_rounded,
+                                    label: _formatRunLabel(script.runCount),
+                                  ),
                           ],
                         ),
                       ],
@@ -740,18 +726,8 @@ extension _ScriptListContent on _ScriptListPageState {
                         colors.onSurfaceVariant,
                       ),
                     ),
-                  Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      _ScriptIcon(
-                          colors: colors, size: 44, pinned: script.isPinned),
-                      Positioned(
-                        left: -3,
-                        top: -3,
-                        child: _ScriptRunningDot(script.name),
-                      ),
-                    ],
-                  ),
+                  _ScriptIcon(
+                      colors: colors, size: 44, pinned: script.isPinned),
                 ],
                 const SizedBox(width: 12),
                 Expanded(
@@ -786,11 +762,14 @@ extension _ScriptListContent on _ScriptListPageState {
                             icon: Icons.schedule_rounded,
                             label: _dateFormat.format(script.modifiedAt),
                           ),
-                          _ScriptMetaChip(
-                            colors: colors,
-                            icon: Icons.play_circle_outline_rounded,
-                            label: _formatRunLabel(script.runCount),
-                          ),
+                          legacy_provider.Provider.of<ExecutionProvider>(context)
+                                  .isScriptRunning(script.name)
+                              ? _RunningStatusChip(colors: colors)
+                              : _ScriptMetaChip(
+                                  colors: colors,
+                                  icon: Icons.play_circle_outline_rounded,
+                                  label: _formatRunLabel(script.runCount),
+                                ),
                         ],
                       ),
                     ],

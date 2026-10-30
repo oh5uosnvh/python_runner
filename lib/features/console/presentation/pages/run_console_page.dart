@@ -328,13 +328,11 @@ class _RunConsoleTerminalPane extends ConsumerWidget {
     return Selector<ExecutionProvider, _TerminalSnapshot>(
       selector: (context, execution) {
         final isRunning = execution.isScriptRunning(scriptName);
-        final selectedRecord = execution.activeRecordForScript(scriptName) ??
-            execution.latestHistoryRecordForScript(scriptName);
         return _TerminalSnapshot(
           logs: execution.logsForScript(scriptName),
           isRunning: isRunning,
           waitingForInput: execution.isScriptWaitingForInput(scriptName),
-          logVersion: selectedRecord?.logCount ?? 0,
+          logVersion: execution.logVersionForScript(scriptName),
         );
       },
       builder: (context, snapshot, _) {

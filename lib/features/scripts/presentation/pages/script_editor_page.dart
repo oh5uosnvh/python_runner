@@ -404,12 +404,15 @@ class _ScriptEditorPageState extends ConsumerState<ScriptEditorPage> {
                 : AppLocalizations.of(context)!.editingMode,
             style: TextStyle(fontSize: 11, color: colors.onSurfaceVariant),
           ),
-          const Spacer(),
-          Text(
-            '${_fontSize.toStringAsFixed(0)} px · ${_formatModifiedAt(context, modifiedAt)}',
-            style: TextStyle(fontSize: 11, color: colors.onSurfaceVariant),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '${_fontSize.toStringAsFixed(0)} px · ${_formatModifiedAt(context, modifiedAt)}',
+              style: TextStyle(fontSize: 11, color: colors.onSurfaceVariant),
+              textAlign: TextAlign.end,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       ),

@@ -160,6 +160,9 @@ class ExecutionProvider extends ChangeNotifier {
       _state.status == ExecutionStatus.running ||
       _state.status == ExecutionStatus.stopping;
 
+  bool get supportsConcurrentExecutions =>
+      _runtimeManager.activeBackendId == RuntimeManager.linuxLikeBackendId;
+
   bool isScriptRunning(String scriptName) {
     final normalized = scriptName.endsWith('.py') ? scriptName : '$scriptName.py';
     return _logHistory.any((record) =>

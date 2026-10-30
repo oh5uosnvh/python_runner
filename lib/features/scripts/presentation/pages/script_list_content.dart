@@ -203,8 +203,6 @@ extension _ScriptListContent on _ScriptListPageState {
             }
 
             final colors = Theme.of(context).colorScheme;
-            final isRunning = legacy_provider.Provider.of<ExecutionProvider>(context)
-                .isScriptRunning(script.name);
             return _ScriptCardSurface(
               key: ValueKey('sliver_script_${script.name}'),
               colors: colors,

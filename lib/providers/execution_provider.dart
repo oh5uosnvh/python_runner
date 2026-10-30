@@ -340,7 +340,7 @@ class ExecutionProvider extends ChangeNotifier {
 
     try {
       _stdinSub = _runtimeManager.stdinRequestStream.listen((request) {
-        final id = request.executionId;
+        final id = request.executionId ?? _state.executionId;
         final record = _historyRecordForExecutionId(id);
         if (record == null) return;
         record.waitingForInput = true;

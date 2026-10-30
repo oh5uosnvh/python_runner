@@ -720,7 +720,9 @@ extension _ScriptListActions on _ScriptListPageState {
         ),
       );
       if (overwrite != true) return;
-      // Overwrite existing script content
+      // Overwrite only the file content. The existing metadata row (including
+      // groupId) remains authoritative; importing into a group must not
+      // silently move a same-named script from another group.
       await controller.saveScript(name, content);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -1070,7 +1072,7 @@ extension _ScriptListActions on _ScriptListPageState {
                 title: Text(AppLocalizations.of(context)!.copy),
                 onTap: () {
                   Navigator.pop(ctx);
-                  _duplicateScript(name);
+                  _duplicateScript(name, groupId: groupId);
                 }),
             ListTile(
                 leading: const Icon(Icons.file_download_outlined),
@@ -1129,12 +1131,13 @@ extension _ScriptListActions on _ScriptListPageState {
     ).whenComplete(controller.dispose);
   }
 
-  Future<void> _duplicateScript(String name) async {
+  Future<void> _duplicateScript(String name, {int? groupId}) async {
     try {
       final controller = ref.read(scriptWorkspaceControllerProvider.notifier);
       final content = await controller.readScript(name);
       final copyName = name.replaceAll('.py', '_copy.py');
-      await controller.createScript(copyName, content: content);
+      await controller.createScript(copyName,
+          content: content, groupId: groupId);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

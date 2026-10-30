@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:python_runner/models/script_file.dart';
+import 'package:python_runner/models/script_group.dart';
 import 'package:python_runner/providers/script_workspace_ui_provider.dart';
 import 'package:python_runner/ui/app_skeleton.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -33,6 +34,54 @@ void main() {
     await _openWorkspaceMenu(tester);
     expect(find.widgetWithText(ListTile, '搜索脚本'), findsOneWidget);
     expect(find.widgetWithText(ListTile, '添加脚本'), findsOneWidget);
+  });
+
+  testWidgets('ordinary group page reuses overflow menu without nested groups',
+      (tester) async {
+    final harness = await _pumpWorkspace(
+      tester,
+      groups: [_group(1, 'Work')],
+      scripts: [_script('daily.py', groupId: 1)],
+    );
+    addTearDown(harness.dispose);
+
+    await tester.tap(find.text('Work'));
+    await tester.pumpAndSettle();
+    expect(find.text('daily'), findsOneWidget);
+    expect(find.byWidgetPredicate((widget) => widget is PopupMenuButton<String>),
+        findsOneWidget);
+
+    await _openWorkspaceMenu(tester);
+    expect(find.widgetWithText(ListTile, '添加脚本'), findsOneWidget);
+    expect(find.widgetWithText(ListTile, '搜索脚本'), findsOneWidget);
+    expect(find.widgetWithText(ListTile, '排序脚本'), findsOneWidget);
+    expect(find.widgetWithText(ListTile, '多选管理'), findsOneWidget);
+    expect(find.widgetWithText(ListTile, '添加分组'), findsNothing);
+    expect(find.widgetWithText(ListTile, '新建项目'), findsNothing);
+  });
+
+  testWidgets('new script from group menu is assigned to current group',
+      (tester) async {
+    final harness = await _pumpWorkspace(
+      tester,
+      groups: [_group(1, 'Work')],
+      scripts: [_script('daily.py', groupId: 1)],
+    );
+    addTearDown(harness.dispose);
+
+    await tester.tap(find.text('Work'));
+    await tester.pumpAndSettle();
+    await _openWorkspaceMenu(tester);
+    await tester.tap(find.widgetWithText(ListTile, '添加脚本'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(ListTile).first);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'inside');
+    await tester.tap(find.text('创建').last);
+    await tester.pumpAndSettle();
+
+    final stored = await harness.database.getAllScripts();
+    expect(stored.singleWhere((script) => script.name == 'inside.py').groupId, 1);
   });
 
   testWidgets('workspace shows skeleton during first script load',
@@ -162,6 +211,7 @@ void main() {
 Future<ScriptWorkspaceHarness> _pumpWorkspace(
   WidgetTester tester, {
   List<ScriptFile> scripts = const [],
+  List<ScriptGroup> groups = const [],
   Completer<void>? loadGate,
   Size size = const Size(390, 844),
   Locale locale = const Locale('zh'),
@@ -180,7 +230,11 @@ Future<ScriptWorkspaceHarness> _pumpWorkspace(
   final harness = ScriptWorkspaceHarness(
     preferences: preferences,
     bridge: bridge,
-    database: InMemoryScriptDatabase(scripts: scripts, loadGate: loadGate),
+    database: InMemoryScriptDatabase(
+      scripts: scripts,
+      groups: groups,
+      loadGate: loadGate,
+    ),
   );
   await tester.pumpWidget(
     harness.buildApp(
@@ -202,10 +256,22 @@ Future<void> _openWorkspaceMenu(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
+ScriptGroup _group(int id, String name) {
+  final time = DateTime(2025, 1, 1);
+  return ScriptGroup(
+    id: id,
+    name: name,
+    createdAt: time,
+    modifiedAt: time,
+    sortOrder: id,
+  );
+}
+
 ScriptFile _script(
   String name, {
   bool isPinned = false,
   int sortOrder = 0,
+  int? groupId,
 }) {
   return ScriptFile(
     name: name,
@@ -215,5 +281,6 @@ ScriptFile _script(
     runCount: 3,
     isPinned: isPinned,
     sortOrder: sortOrder,
+    groupId: groupId,
   );
 }

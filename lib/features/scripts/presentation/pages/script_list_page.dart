@@ -181,32 +181,37 @@ class _ScriptListPageState extends ConsumerState<ScriptListPage> {
             contentPadding: EdgeInsets.zero,
           ),
         ),
-        PopupMenuItem(
-          value: 'add_group',
-          child: ListTile(
-            leading: const Icon(Icons.create_new_folder_outlined),
-            title: Text(l10n.addGroup),
-            contentPadding: EdgeInsets.zero,
-          ),
-        ),
-        if (_canUseProjects)
+        // Groups and projects are root-level items.  Do not expose these
+        // actions inside an ordinary group: this app has no nested-group
+        // semantics, so creating one here must never appear to nest it.
+        if (_activeGroupId == null) ...[
           PopupMenuItem(
-            value: 'add_project',
+            value: 'add_group',
             child: ListTile(
-              leading: const Icon(Icons.account_tree_outlined),
-              title: Text(l10n.newProject),
+              leading: const Icon(Icons.create_new_folder_outlined),
+              title: Text(l10n.addGroup),
               contentPadding: EdgeInsets.zero,
             ),
           ),
-        if (_canUseProjects)
-          PopupMenuItem(
-            value: 'import_project_zip',
-            child: ListTile(
-              leading: const Icon(Icons.archive_outlined),
-              title: Text(l10n.importProjectZip),
-              contentPadding: EdgeInsets.zero,
+          if (_canUseProjects)
+            PopupMenuItem(
+              value: 'add_project',
+              child: ListTile(
+                leading: const Icon(Icons.account_tree_outlined),
+                title: Text(l10n.newProject),
+                contentPadding: EdgeInsets.zero,
+              ),
             ),
-          ),
+          if (_canUseProjects)
+            PopupMenuItem(
+              value: 'import_project_zip',
+              child: ListTile(
+                leading: const Icon(Icons.archive_outlined),
+                title: Text(l10n.importProjectZip),
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+        ],
         PopupMenuItem(
           value: 'search',
           child: ListTile(
@@ -478,11 +483,12 @@ class _ScriptListPageState extends ConsumerState<ScriptListPage> {
                                   _buildScriptMenu(),
                                 ]
                               : [
-                                  IconButton(
-                                    icon: const Icon(Icons.checklist),
-                                    tooltip: l10n.multiSelect,
-                                    onPressed: _enterMultiSelect,
-                                  ),
+                                  _buildScriptNameVisibilityButton(),
+                                  // Keep the group page's overflow affordance
+                                  // identical to the root workspace. Actions
+                                  // that create groups/projects remain hidden
+                                  // there because groups are not nestable.
+                                  _buildScriptMenu(),
                                 ],
                         ),
       body: Column(

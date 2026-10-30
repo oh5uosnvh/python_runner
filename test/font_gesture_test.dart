@@ -38,6 +38,7 @@ void main() {
           Scaffold(
             body: SizedBox.expand(
               child: TerminalView(
+                autoFollowInitiallyEnabled: false,
                 logs: [
                   LogEntry(
                     type: LogType.stdout,
@@ -64,13 +65,13 @@ void main() {
       expect(find.byIcon(Icons.text_increase_rounded), findsNothing);
       expect(find.byIcon(Icons.format_size), findsNothing);
 
-      final terminalLine = _richTextContaining('large terminal output 4998');
+      final terminalLine = _richTextContaining('hello from terminal');
       expect(terminalLine, findsOneWidget);
 
       final before = _richTextFontSizeForText(
         tester,
         terminalLine,
-        'large terminal output 4998',
+        'hello from terminal',
       );
 
       await _pinchOut(
@@ -82,7 +83,7 @@ void main() {
       final after = _richTextFontSizeForText(
         tester,
         terminalLine,
-        'large terminal output 4998',
+        'hello from terminal',
       );
       expect(after, greaterThan(before));
     });

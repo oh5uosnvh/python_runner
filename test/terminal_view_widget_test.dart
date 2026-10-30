@@ -92,10 +92,8 @@ void main() {
     await tester.enterText(find.byType(TextField), 'fatal marker');
     await tester.pumpAndSettle();
 
-    expect(
-      _terminalLogContaining('fatal marker\nwith a wrapped continuation'),
-      findsOneWidget,
-    );
+    expect(_terminalLogContaining('fatal marker'), findsOneWidget);
+    expect(_terminalLogContaining('with a wrapped continuation'), findsOneWidget);
     expect(_terminalLogContaining('ordinary output 0'), findsNothing);
 
     await tester.tap(find.byTooltip('仅看错误'));

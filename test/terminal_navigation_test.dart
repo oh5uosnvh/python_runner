@@ -9,6 +9,31 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
+  testWidgets('blank log lines occupy normal terminal line height',
+      (tester) async {
+    final entries = ['batch 1', '', 'saved', '', 'batch 2']
+        .map((text) => LogEntry(
+              type: LogType.stdout,
+              content: text,
+              timestamp: DateTime(2026),
+            ))
+        .toList();
+    await tester.pumpWidget(_app(TerminalView(
+      logs: entries,
+      autoFollowInitiallyEnabled: false,
+    )));
+    await tester.pumpAndSettle();
+    final first = find.byWidgetPredicate((w) =>
+        w is Text && w.textSpan?.toPlainText() == 'batch 1');
+    final last = find.byWidgetPredicate((w) =>
+        w is Text && w.textSpan?.toPlainText() == 'batch 2');
+    expect(first, findsOneWidget);
+    expect(last, findsOneWidget);
+    final gap = tester.getTopLeft(last).dy - tester.getTopLeft(first).dy;
+    expect(gap, greaterThan(30));
+    expect(gap, lessThan(150));
+  });
+
   testWidgets('auto-follow opens existing output at the latest line',
       (tester) async {
     await tester.pumpWidget(_app(TerminalView(logs: _logs(400))));

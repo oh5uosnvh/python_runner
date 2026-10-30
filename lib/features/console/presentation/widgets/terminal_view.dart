@@ -20,6 +20,17 @@ enum TerminalColorMode { dark, light, system, monochrome }
 
 enum _TerminalMenuAction { autoFollow, lineNumbers, export, clear }
 
+/// One physically rendered terminal line. A log entry may contain several
+/// newline-delimited lines; keeping those lines as separate sliver children is
+/// important because a variable-height child makes ListView's scroll offset
+/// estimate drift when jumping across a large, partially laid out log.
+class _TerminalLine {
+  final LogEntry log;
+  final String content;
+
+  const _TerminalLine(this.log, this.content);
+}
+
 extension on TerminalColorMode {
   String label(AppLocalizations l10n) {
     switch (this) {
@@ -127,6 +138,9 @@ class TerminalViewState extends State<TerminalView> {
   int? _filteredLogsVersion;
   String? _filteredLogsQuery;
   bool? _filteredLogsErrorsOnly;
+  List<_TerminalLine>? _terminalLinesCache;
+  List<LogEntry>? _terminalLinesSource;
+  int? _terminalLinesVersion;
 
   @override
   void initState() {
@@ -254,6 +268,9 @@ class TerminalViewState extends State<TerminalView> {
     if (!identical(widget.logs, oldWidget.logs) ||
         widget.logVersion != oldWidget.logVersion) {
       _invalidateFilteredLogs();
+      _terminalLinesCache = null;
+      _terminalLinesSource = null;
+      _terminalLinesVersion = null;
     }
     if (widget.logs.isEmpty && _ansiCache.isNotEmpty) {
       _ansiCache.clear();
@@ -440,10 +457,15 @@ class TerminalViewState extends State<TerminalView> {
         : AnsiPalette.light;
   }
 
-  List<TextSpan> _getSpans(LogEntry log, Color defaultColor) {
+  List<TextSpan> _getSpans(
+    LogEntry log,
+    Color defaultColor, {
+    String? content,
+  }) {
     final palette = _ansiPalette();
+    final text = content ?? log.content;
     final key =
-        '${log.type.name}|${defaultColor.toARGB32()}|${palette.name}|${log.content}';
+        '${log.type.name}|${defaultColor.toARGB32()}|${palette.name}|$text';
     final cached = _ansiCache.remove(key);
     if (cached != null) {
       _ansiCache[key] = cached;
@@ -451,7 +473,7 @@ class TerminalViewState extends State<TerminalView> {
     }
 
     final parsed = AnsiParser.parse(
-      log.content,
+      text,
       defaultColor: defaultColor,
       palette: palette,
     );
@@ -524,12 +546,37 @@ class TerminalViewState extends State<TerminalView> {
     _filteredLogsErrorsOnly = null;
   }
 
+  List<_TerminalLine> _terminalLines(List<LogEntry> logs) {
+    if (_terminalLinesCache != null &&
+        identical(_terminalLinesSource, logs) &&
+        _terminalLinesVersion == widget.logVersion) {
+      return _terminalLinesCache!;
+    }
+
+    // Splitting on newlines retains empty and trailing components. An
+    // empty component is a real terminal line, not missing content and must
+    // occupy exactly one line box rather than becoming an oversized parent.
+    final lines = <_TerminalLine>[];
+    for (final log in logs) {
+      for (final content in log.content.split('\n')) {
+        lines.add(_TerminalLine(log, content.endsWith('\r')
+            ? content.substring(0, content.length - 1)
+            : content));
+      }
+    }
+    final snapshot = List<_TerminalLine>.unmodifiable(lines);
+    _terminalLinesCache = snapshot;
+    _terminalLinesSource = logs;
+    _terminalLinesVersion = widget.logVersion;
+    return snapshot;
+  }
+
   TextSpan _buildLineSpan(
-    LogEntry log,
+    _TerminalLine line,
     int index,
     ColorScheme colors,
   ) {
-    final color = _logColor(log.type, colors);
+    final color = _logColor(line.log.type, colors);
     final spans = <InlineSpan>[];
 
     if (_showLineNumbers) {
@@ -545,7 +592,11 @@ class TerminalViewState extends State<TerminalView> {
       ));
     }
 
-    for (final span in _getSpans(log, color)) {
+    // Text.rich with an empty string has no glyph and can collapse during
+    // layout. The zero-width space keeps the line box while remaining
+    // invisible, so consecutive and trailing blank lines have normal spacing.
+    final content = line.content.isEmpty ? '\u200B' : line.content;
+    for (final span in _getSpans(line.log, color, content: content)) {
       spans.add(TextSpan(
         text: span.text,
         style: TextStyle(
@@ -848,6 +899,7 @@ class TerminalViewState extends State<TerminalView> {
     final isDark = _terminalBrightness() == Brightness.dark;
     final logs = widget.logs;
     final displayLogs = _filteredLogs();
+    final displayLines = _terminalLines(displayLogs);
     final bgColor = AppThemeColors.terminalCanvas(isDark);
     final inputBarColor = AppThemeColors.terminalSurface(isDark);
     final inputFillColor = AppThemeColors.terminalInput(isDark);
@@ -982,11 +1034,11 @@ class TerminalViewState extends State<TerminalView> {
                               const ScrollCacheExtent.pixels(200),
                           addAutomaticKeepAlives: false,
                           addRepaintBoundaries: true,
-                          itemCount: displayLogs.length,
+                          itemCount: displayLines.length,
                           itemBuilder: (context, index) => Padding(
                             padding: const EdgeInsets.symmetric(vertical: 1),
                             child: Text.rich(
-                              _buildLineSpan(displayLogs[index], index, colors),
+                              _buildLineSpan(displayLines[index], index, colors),
                             ),
                           ),
                         ),

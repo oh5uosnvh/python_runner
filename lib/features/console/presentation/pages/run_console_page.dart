@@ -1,13 +1,17 @@
 import '../../../../ui/app_materials.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:provider/provider.dart';
+
 import '../../../../models/log_entry.dart';
 import '../../../../models/script_group.dart';
 import '../../../../providers/execution_provider.dart';
 import '../../../../providers/console_display_preferences_provider.dart';
 import '../../../../models/execution_state.dart';
+
 import 'package:python_runner/features/scripts/application/script_workspace_controller.dart';
+
 import '../../../../services/native_bridge.dart';
 import '../../../../ui/app_badges.dart';
 import '../../../../ui/app_design_tokens.dart';
@@ -48,21 +52,22 @@ class _RunConsolePageState extends ConsumerState<RunConsolePage>
     final exec = context.read<ExecutionProvider>();
     final activeRecord =
         exec.historyRecordForScriptExecution(widget.scriptName) ??
-            exec.latestHistoryRecordForScript(widget.scriptName);
+        exec.latestHistoryRecordForScript(widget.scriptName);
     _runStartTime = activeRecord?.startTime;
   }
 
   @override
   void didChangeMetrics() {
-    // Keyboard open/close: scroll to bottom
-    _terminalKey.currentState?.forceAutoScroll();
+    // A viewport change must not override a user reading earlier output.
+    _terminalKey.currentState?.followViewportIfEnabled();
   }
 
   Future<void> _rerun() async {
     try {
       final exec = context.read<ExecutionProvider>();
-      final scriptWorkspace =
-          ref.read(scriptWorkspaceControllerProvider.notifier);
+      final scriptWorkspace = ref.read(
+        scriptWorkspaceControllerProvider.notifier,
+      );
       final projectGroup = widget.projectGroup;
       if (projectGroup != null && projectGroup.isProject) {
         await exec.executeScriptProject(projectGroup);
@@ -111,7 +116,8 @@ class _RunConsolePageState extends ConsumerState<RunConsolePage>
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            content: Text('${AppLocalizations.of(context)!.error}: $error')),
+          content: Text('${AppLocalizations.of(context)!.error}: $error'),
+        ),
       );
       rethrow;
     }
@@ -175,30 +181,35 @@ class _RunConsoleAppBar extends StatelessWidget implements PreferredSizeWidget {
       (p) => p.state.status,
     );
     final executionProvider = context.read<ExecutionProvider>();
-    final selectedRecord = executionProvider.historyRecordForScriptExecution(
-          scriptName,
-        ) ??
+    final selectedRecord =
+        executionProvider.historyRecordForScriptExecution(scriptName) ??
         executionProvider.latestHistoryRecordForScript(scriptName);
     final isRunning = providerIsRunning;
-    final status = selectedRecord?.status ??
+    final status =
+        selectedRecord?.status ??
         (isRunning ? providerStatus : ExecutionStatus.idle);
     final selectedWaiting = isRunning ? waiting : false;
 
     final statusText = isRunning
         ? (selectedWaiting ? l10n.waitingForInputStatus : l10n.running)
         : (status == ExecutionStatus.error
-            ? l10n.error
-            : status == ExecutionStatus.timeout
-                ? l10n.timeout
-                : status == ExecutionStatus.stopped
-                    ? l10n.stopped
-                    : status == ExecutionStatus.completed
-                        ? l10n.finished
-                        : l10n.noRun);
-    final appBarBg =
-        isDark ? AppThemeColors.terminalDarkSurface : colors.surface;
-    final statusColor =
-        _statusColor(context, isRunning, selectedWaiting, status);
+              ? l10n.error
+              : status == ExecutionStatus.timeout
+              ? l10n.timeout
+              : status == ExecutionStatus.stopped
+              ? l10n.stopped
+              : status == ExecutionStatus.completed
+              ? l10n.finished
+              : l10n.noRun);
+    final appBarBg = isDark
+        ? AppThemeColors.terminalDarkSurface
+        : colors.surface;
+    final statusColor = _statusColor(
+      context,
+      isRunning,
+      selectedWaiting,
+      status,
+    );
 
     return AppBar(
       flexibleSpace: appGlassBarBackground(context),
@@ -254,7 +265,8 @@ class _RunConsoleAppBar extends StatelessWidget implements PreferredSizeWidget {
         if (isRunning)
           IconButton(
             icon: Icon(Icons.stop_rounded, color: colors.error, size: 22),
-            onPressed: () => context.read<ExecutionProvider>().stopScript(scriptName),
+            onPressed: () =>
+                context.read<ExecutionProvider>().stopScript(scriptName),
             tooltip: l10n.stop,
           )
         else
@@ -342,10 +354,13 @@ class _RunConsoleTerminalPane extends ConsumerWidget {
             logs: snapshot.logs,
             isRunning: snapshot.isRunning,
             waitingForInput: snapshot.waitingForInput,
-            onStdin: (input) =>
-                context.read<ExecutionProvider>().sendStdinForScript(scriptName, input),
+            onStdin: (input) => context
+                .read<ExecutionProvider>()
+                .sendStdinForScript(scriptName, input),
             onClear: snapshot.isRunning
-                ? () => context.read<ExecutionProvider>().clearLogsForScript(scriptName)
+                ? () => context.read<ExecutionProvider>().clearLogsForScript(
+                    scriptName,
+                  )
                 : null,
             onExport: onExport,
             autoFollowInitiallyEnabled: displayPreferences.autoFollowOutput,

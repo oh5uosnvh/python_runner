@@ -256,7 +256,7 @@ class _ScriptEditorPageState extends ConsumerState<ScriptEditorPage> {
       if (mounted) {
         Navigator.push(
           context,
-          AppPageTransitions.scaleIn(
+          AppPageTransitions.terminal(
             RunConsolePage(scriptName: widget.scriptName),
           ),
         );
@@ -458,7 +458,7 @@ class _ScriptEditorPageState extends ConsumerState<ScriptEditorPage> {
                 case 'console':
                   Navigator.push(
                     context,
-                    AppPageTransitions.fadeThrough(
+                    AppPageTransitions.terminal(
                       RunConsolePage(scriptName: widget.scriptName),
                     ),
                   );

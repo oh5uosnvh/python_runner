@@ -84,7 +84,7 @@ class _ScriptProjectPageState extends ConsumerState<ScriptProjectPage> {
     if (!mounted) return;
     Navigator.push(
       context,
-      AppPageTransitions.fadeThrough(
+      AppPageTransitions.terminal(
         RunConsolePage(
           scriptName: project.group.name,
           projectGroup: project.group,

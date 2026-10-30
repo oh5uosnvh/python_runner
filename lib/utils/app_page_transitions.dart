@@ -5,6 +5,14 @@ import '../ui/app_materials.dart';
 class AppPageTransitions {
   const AppPageTransitions._();
 
+  /// Terminal pages can be expensive to lay out and are opaque. Avoid
+  /// compositing them over the previous page during navigation.
+  static Route<T> terminal<T>(Widget page) => PageRouteBuilder<T>(
+    transitionDuration: Duration.zero,
+    reverseTransitionDuration: Duration.zero,
+    pageBuilder: (_, __, ___) => page,
+  );
+
   static Route<T> fadeThrough<T>(Widget page) {
     return _AppPageRoute<T>(
       transitionDuration: const Duration(milliseconds: 300),

@@ -1,11 +1,14 @@
 import '../../../../ui/app_popup_menu.dart';
 import '../../../../ui/app_materials.dart';
+
 import 'dart:async';
 import 'dart:collection';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../../../../models/log_entry.dart';
 import '../../../../utils/ansi_parser.dart';
 import '../../../../l10n/app_localizations.dart';
@@ -127,7 +130,7 @@ class TerminalViewState extends State<TerminalView> {
   int _ansiCacheBytes = 0;
   int _lastLogCount = 0;
   int _lastLogVersion = 0;
-  String? _lastLogTailSignature;
+  LogEntry? _lastLogTail;
   bool _hasUnreadOutput = false;
 
   // Filtering is only expensive when the user asks for it. Keep the result
@@ -138,7 +141,11 @@ class TerminalViewState extends State<TerminalView> {
   int? _filteredLogsVersion;
   String? _filteredLogsQuery;
   bool? _filteredLogsErrorsOnly;
-  List<_TerminalLine>? _terminalLinesCache;
+  // Keep only newline offsets for each entry; materialize text for visible
+  // sliver children instead of allocating one object and substring per line.
+  final List<LogEntry> _indexedLogs = [];
+  final List<List<int>> _lineStarts = [];
+  final List<int> _lineEnds = [];
   List<LogEntry>? _terminalLinesSource;
   int? _terminalLinesVersion;
 
@@ -149,7 +156,7 @@ class TerminalViewState extends State<TerminalView> {
     _autoFollowEnabled = widget.autoFollowInitiallyEnabled;
     _lastLogCount = widget.logs.length;
     _lastLogVersion = widget.logVersion;
-    _lastLogTailSignature = _logTailSignature(widget.logs);
+    _lastLogTail = widget.logs.isEmpty ? null : widget.logs.last;
     _scrollController.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -166,17 +173,16 @@ class TerminalViewState extends State<TerminalView> {
     final prefs = await SharedPreferences.getInstance();
     final savedFontSize = prefs.getDouble(_fontSizePrefsKey);
     final savedColorMode = prefs.getString(_colorModePrefsKey);
-    final colorMode =
-        TerminalColorMode.values.cast<TerminalColorMode?>().firstWhere(
-              (item) => item?.name == savedColorMode,
-              orElse: () => null,
-            );
+    final colorMode = TerminalColorMode.values
+        .cast<TerminalColorMode?>()
+        .firstWhere((item) => item?.name == savedColorMode, orElse: () => null);
     if (!mounted) return;
     if (savedFontSize != null || colorMode != null) {
       setState(() {
         if (savedFontSize != null) {
-          _fontSize =
-              savedFontSize.clamp(_fontSizeMin, _fontSizeMax).toDouble();
+          _fontSize = savedFontSize
+              .clamp(_fontSizeMin, _fontSizeMax)
+              .toDouble();
         }
         if (colorMode != null) {
           _colorMode = colorMode;
@@ -187,7 +193,8 @@ class TerminalViewState extends State<TerminalView> {
     }
     if (savedColorMode == null) {
       unawaited(
-          prefs.setString(_colorModePrefsKey, TerminalColorMode.dark.name));
+        prefs.setString(_colorModePrefsKey, TerminalColorMode.dark.name),
+      );
     }
   }
 
@@ -201,6 +208,7 @@ class TerminalViewState extends State<TerminalView> {
     setState(() {
       _colorMode = mode;
       _ansiCache.clear();
+      _ansiCacheBytes = 0;
     });
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_colorModePrefsKey, mode.name);
@@ -260,7 +268,8 @@ class TerminalViewState extends State<TerminalView> {
   @override
   void didUpdateWidget(covariant TerminalView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.autoFollowInitiallyEnabled != oldWidget.autoFollowInitiallyEnabled) {
+    if (widget.autoFollowInitiallyEnabled !=
+        oldWidget.autoFollowInitiallyEnabled) {
       _autoFollowEnabled = widget.autoFollowInitiallyEnabled;
       _autoScroll = _autoFollowEnabled;
       if (_autoScroll) _scrollToBottom();
@@ -268,9 +277,6 @@ class TerminalViewState extends State<TerminalView> {
     if (!identical(widget.logs, oldWidget.logs) ||
         widget.logVersion != oldWidget.logVersion) {
       _invalidateFilteredLogs();
-      _terminalLinesCache = null;
-      _terminalLinesSource = null;
-      _terminalLinesVersion = null;
     }
     if (widget.logs.isEmpty && _ansiCache.isNotEmpty) {
       _ansiCache.clear();
@@ -279,11 +285,12 @@ class TerminalViewState extends State<TerminalView> {
     if (widget.logs.isEmpty) {
       _invalidateFilteredLogs();
     }
-    final currentTailSignature = _logTailSignature(widget.logs);
-    final hasAppendedOutput = widget.logs.isNotEmpty &&
+    final currentTail = widget.logs.isEmpty ? null : widget.logs.last;
+    final hasAppendedOutput =
+        widget.logs.isNotEmpty &&
         (widget.logs.length > _lastLogCount ||
             (widget.logVersion != _lastLogVersion &&
-                currentTailSignature != _lastLogTailSignature));
+                !_sameLogTail(currentTail, _lastLogTail)));
     if (widget.logs.isEmpty || widget.logs.length < _lastLogCount) {
       _setUnreadOutput(false);
     } else if (hasAppendedOutput) {
@@ -296,7 +303,7 @@ class TerminalViewState extends State<TerminalView> {
     }
     _lastLogCount = widget.logs.length;
     _lastLogVersion = widget.logVersion;
-    _lastLogTailSignature = currentTailSignature;
+    _lastLogTail = currentTail;
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _syncUnreadOutputWithViewport(),
     );
@@ -327,12 +334,15 @@ class TerminalViewState extends State<TerminalView> {
     });
   }
 
-  String? _logTailSignature(List<LogEntry> logs) {
-    if (logs.isEmpty) return null;
-    final last = logs.last;
-    return '${last.executionId}|${last.timestamp.microsecondsSinceEpoch}|'
-        '${last.type.name}|${last.content}';
-  }
+  bool _sameLogTail(LogEntry? a, LogEntry? b) =>
+      identical(a, b) ||
+      (a != null &&
+          b != null &&
+          a.executionId == b.executionId &&
+          a.timestamp.microsecondsSinceEpoch ==
+              b.timestamp.microsecondsSinceEpoch &&
+          a.type == b.type &&
+          a.content == b.content);
 
   void _setUnreadOutput(bool value) {
     if (_hasUnreadOutput == value) return;
@@ -408,6 +418,11 @@ class TerminalViewState extends State<TerminalView> {
   void forceAutoScroll() {
     if (!mounted) return;
     _jumpToBottom();
+  }
+
+  /// Preserve a user's scroll position when the keyboard or viewport changes.
+  void followViewportIfEnabled() {
+    if (mounted && _autoScroll) _scrollToBottom();
   }
 
   void _submitStdin() {
@@ -526,8 +541,9 @@ class TerminalViewState extends State<TerminalView> {
     }
     if (_searchQuery.isNotEmpty) {
       final q = _searchQuery.toLowerCase();
-      result =
-          result.where((l) => l.content.toLowerCase().contains(q)).toList();
+      result = result
+          .where((l) => l.content.toLowerCase().contains(q))
+          .toList();
     }
     final snapshot = List<LogEntry>.unmodifiable(result);
     _filteredLogsCache = snapshot;
@@ -546,50 +562,83 @@ class TerminalViewState extends State<TerminalView> {
     _filteredLogsErrorsOnly = null;
   }
 
-  List<_TerminalLine> _terminalLines(List<LogEntry> logs) {
-    if (_terminalLinesCache != null &&
-        identical(_terminalLinesSource, logs) &&
-        _terminalLinesVersion == widget.logVersion) {
-      return _terminalLinesCache!;
-    }
+  void _indexTerminalLines(List<LogEntry> logs) {
+    if (identical(_terminalLinesSource, logs) &&
+        _terminalLinesVersion == widget.logVersion)
+      return;
 
-    // Splitting on newlines retains empty and trailing components. An
-    // empty component is a real terminal line, not missing content and must
-    // occupy exactly one line box rather than becoming an oversized parent.
-    final lines = <_TerminalLine>[];
-    for (final log in logs) {
-      for (final content in log.content.split('\n')) {
-        lines.add(_TerminalLine(log, content.endsWith('\r')
-            ? content.substring(0, content.length - 1)
-            : content));
-      }
+    // Snapshots share unchanged immutable LogEntry objects. Verify the whole
+    // common prefix: a replacement or trimmed history must never reuse stale
+    // offsets, even when the list object itself was mutated.
+    var common = 0;
+    while (common < logs.length &&
+        common < _indexedLogs.length &&
+        identical(logs[common], _indexedLogs[common])) {
+      common++;
     }
-    final snapshot = List<_TerminalLine>.unmodifiable(lines);
-    _terminalLinesCache = snapshot;
+    _indexedLogs.length = common;
+    _lineStarts.length = common;
+    _lineEnds.length = common;
+    var total = common == 0 ? 0 : _lineEnds.last;
+    for (var i = common; i < logs.length; i++) {
+      final content = logs[i].content;
+      final starts = <int>[0];
+      for (
+        var offset = content.indexOf('\n');
+        offset != -1;
+        offset = content.indexOf('\n', offset + 1)
+      ) {
+        starts.add(offset + 1);
+      }
+      total += starts.length;
+      _indexedLogs.add(logs[i]);
+      _lineStarts.add(starts);
+      _lineEnds.add(total);
+    }
     _terminalLinesSource = logs;
     _terminalLinesVersion = widget.logVersion;
-    return snapshot;
   }
 
-  TextSpan _buildLineSpan(
-    _TerminalLine line,
-    int index,
-    ColorScheme colors,
-  ) {
+  _TerminalLine _terminalLineAt(int index) {
+    var low = 0;
+    var high = _lineEnds.length;
+    while (low < high) {
+      final mid = low + (high - low) ~/ 2;
+      if (_lineEnds[mid] <= index) {
+        low = mid + 1;
+      } else {
+        high = mid;
+      }
+    }
+    final log = _indexedLogs[low];
+    final starts = _lineStarts[low];
+    final line = index - (low == 0 ? 0 : _lineEnds[low - 1]);
+    final start = starts[line];
+    var end = line + 1 < starts.length
+        ? starts[line + 1] - 1
+        : log.content.length;
+    if (end > start && log.content.codeUnitAt(end - 1) == 13) end--;
+    return _TerminalLine(log, log.content.substring(start, end));
+  }
+
+  TextSpan _buildLineSpan(_TerminalLine line, int index, ColorScheme colors) {
     final color = _logColor(line.log.type, colors);
     final spans = <InlineSpan>[];
 
     if (_showLineNumbers) {
-      spans.add(TextSpan(
-        text: '${'${index + 1}'.padLeft(4)}  ',
-        style: TextStyle(
-          fontFamily: 'monospace',
-          fontSize: _fontSize * 0.85,
-          color: Theme.of(context).brightness == Brightness.dark
-              ? AppThemeColors.terminalDarkText.withValues(alpha: 0.24)
-              : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.26),
+      spans.add(
+        TextSpan(
+          text: '${'${index + 1}'.padLeft(4)}  ',
+          style: TextStyle(
+            fontFamily: 'monospace',
+            fontSize: _fontSize * 0.85,
+            color: Theme.of(context).brightness == Brightness.dark
+                ? AppThemeColors.terminalDarkText.withValues(alpha: 0.24)
+                : Theme.of(context).colorScheme.onSurface
+                      .withValues(alpha: 0.26),
+          ),
         ),
-      ));
+      );
     }
 
     // Text.rich with an empty string has no glyph and can collapse during
@@ -597,17 +646,19 @@ class TerminalViewState extends State<TerminalView> {
     // invisible, so consecutive and trailing blank lines have normal spacing.
     final content = line.content.isEmpty ? '\u200B' : line.content;
     for (final span in _getSpans(line.log, color, content: content)) {
-      spans.add(TextSpan(
-        text: span.text,
-        style: TextStyle(
-          fontFamily: 'monospace',
-          fontSize: _fontSize,
-          height: 1.5,
-          color: span.style?.color ?? color,
-          backgroundColor: span.style?.backgroundColor,
-          fontWeight: span.style?.fontWeight,
+      spans.add(
+        TextSpan(
+          text: span.text,
+          style: TextStyle(
+            fontFamily: 'monospace',
+            fontSize: _fontSize,
+            height: 1.5,
+            color: span.style?.color ?? color,
+            backgroundColor: span.style?.backgroundColor,
+            fontWeight: span.style?.fontWeight,
+          ),
         ),
-      ));
+      );
     }
 
     return TextSpan(children: spans);
@@ -624,8 +675,9 @@ class TerminalViewState extends State<TerminalView> {
   Future<void> _exportAll() async {
     if (widget.onExport == null) return;
     final l10n = _terminalLocalizations(context);
-    final content =
-        widget.logs.map((entry) => AnsiParser.strip(entry.content)).join('\n');
+    final content = widget.logs
+        .map((entry) => AnsiParser.strip(entry.content))
+        .join('\n');
     try {
       await widget.onExport!(content);
     } catch (_) {
@@ -899,7 +951,7 @@ class TerminalViewState extends State<TerminalView> {
     final isDark = _terminalBrightness() == Brightness.dark;
     final logs = widget.logs;
     final displayLogs = _filteredLogs();
-    final displayLines = _terminalLines(displayLogs);
+    _indexTerminalLines(displayLogs);
     final bgColor = AppThemeColors.terminalCanvas(isDark);
     final inputBarColor = AppThemeColors.terminalSurface(isDark);
     final inputFillColor = AppThemeColors.terminalInput(isDark);
@@ -913,8 +965,9 @@ class TerminalViewState extends State<TerminalView> {
     final barColor = isDark
         ? AppThemeColors.terminalDarkSurface
         : colors.surfaceContainerHighest;
-    final toolbarTextColor =
-        isDark ? AppThemeColors.terminalDarkToolbarText : colors.onSurface;
+    final toolbarTextColor = isDark
+        ? AppThemeColors.terminalDarkToolbarText
+        : colors.onSurface;
     final toolbarHintColor = AppThemeColors.terminalMuted(colors, isDark);
     final toolbarErrorColor = AppThemeColors.terminalError(colors, isDark);
 
@@ -942,15 +995,19 @@ class TerminalViewState extends State<TerminalView> {
                       enableSuggestions: false,
                       autocorrect: false,
                       style: TextStyle(fontSize: 13, color: toolbarTextColor),
-                      cursorColor:
-                          AppThemeColors.terminalAccent(colors, isDark),
+                      cursorColor: AppThemeColors.terminalAccent(
+                        colors,
+                        isDark,
+                      ),
                       decoration: InputDecoration(
                         hintText: localizations.searchLogs,
                         hintStyle: TextStyle(color: toolbarHintColor),
                         border: InputBorder.none,
                         isDense: true,
                         contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 6),
+                          horizontal: 8,
+                          vertical: 6,
+                        ),
                       ),
                       onChanged: (v) => setState(() {
                         _searchQuery = v;
@@ -959,13 +1016,17 @@ class TerminalViewState extends State<TerminalView> {
                     ),
                   ),
                   IconButton(
-                    icon: Icon(Icons.error_outline,
-                        size: 18,
-                        color: _filterErrors
-                            ? toolbarErrorColor
-                            : toolbarHintColor),
-                    constraints:
-                        const BoxConstraints(minWidth: 44, minHeight: 44),
+                    icon: Icon(
+                      Icons.error_outline,
+                      size: 18,
+                      color: _filterErrors
+                          ? toolbarErrorColor
+                          : toolbarHintColor,
+                    ),
+                    constraints: const BoxConstraints(
+                      minWidth: 44,
+                      minHeight: 44,
+                    ),
                     onPressed: () => setState(() {
                       _filterErrors = !_filterErrors;
                       _invalidateFilteredLogs();
@@ -976,8 +1037,10 @@ class TerminalViewState extends State<TerminalView> {
                   ),
                   IconButton(
                     icon: Icon(Icons.close, size: 18, color: toolbarHintColor),
-                    constraints:
-                        const BoxConstraints(minWidth: 44, minHeight: 44),
+                    constraints: const BoxConstraints(
+                      minWidth: 44,
+                      minHeight: 44,
+                    ),
                     onPressed: () => setState(() {
                       _searchVisible = false;
                       _searchQuery = '';
@@ -1013,12 +1076,13 @@ class TerminalViewState extends State<TerminalView> {
                             (_searchQuery.isNotEmpty || _filterErrors)
                                 ? localizations.noMatchingOutput
                                 : (widget.emptyMessage ??
-                                    (widget.isRunning
-                                        ? localizations.waitingForOutput
-                                        : localizations.noOutput)),
+                                      (widget.isRunning
+                                          ? localizations.waitingForOutput
+                                          : localizations.noOutput)),
                             style: TextStyle(
-                                color: colors.onSurface.withValues(alpha: 0.24),
-                                fontSize: 14),
+                              color: colors.onSurface.withValues(alpha: 0.24),
+                              fontSize: 14,
+                            ),
                           ),
                         ],
                       ),
@@ -1030,15 +1094,20 @@ class TerminalViewState extends State<TerminalView> {
                         child: ListView.builder(
                           controller: _scrollController,
                           padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
-                          scrollCacheExtent:
-                              const ScrollCacheExtent.pixels(200),
+                          scrollCacheExtent: const ScrollCacheExtent.pixels(
+                            200,
+                          ),
                           addAutomaticKeepAlives: false,
                           addRepaintBoundaries: true,
-                          itemCount: displayLines.length,
+                          itemCount: _lineEnds.isEmpty ? 0 : _lineEnds.last,
                           itemBuilder: (context, index) => Padding(
                             padding: const EdgeInsets.symmetric(vertical: 1),
                             child: Text.rich(
-                              _buildLineSpan(displayLines[index], index, colors),
+                              _buildLineSpan(
+                                _terminalLineAt(index),
+                                index,
+                                colors,
+                              ),
                             ),
                           ),
                         ),
@@ -1058,12 +1127,19 @@ class TerminalViewState extends State<TerminalView> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.arrow_downward,
-                        size: 14, color: colors.onSurfaceVariant),
+                    Icon(
+                      Icons.arrow_downward,
+                      size: 14,
+                      color: colors.onSurfaceVariant,
+                    ),
                     const SizedBox(width: 4),
-                    Text(localizations.newOutputAvailable,
-                        style: TextStyle(
-                            color: colors.onSurfaceVariant, fontSize: 12)),
+                    Text(
+                      localizations.newOutputAvailable,
+                      style: TextStyle(
+                        color: colors.onSurfaceVariant,
+                        fontSize: 12,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -1124,7 +1200,9 @@ class TerminalViewState extends State<TerminalView> {
                               disabledBorder: InputBorder.none,
                               isDense: true,
                               contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 0, vertical: 13),
+                                horizontal: 0,
+                                vertical: 13,
+                              ),
                             ),
                             onSubmitted: widget.waitingForInput
                                 ? (_) => _submitStdin()
@@ -1138,10 +1216,14 @@ class TerminalViewState extends State<TerminalView> {
                               onTap: _submitStdin,
                               borderRadius: BorderRadius.circular(10),
                               child: Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 12),
-                                child: Icon(Icons.send_rounded,
-                                    size: 20, color: colors.primary),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                ),
+                                child: Icon(
+                                  Icons.send_rounded,
+                                  size: 20,
+                                  color: colors.primary,
+                                ),
                               ),
                             ),
                           ),

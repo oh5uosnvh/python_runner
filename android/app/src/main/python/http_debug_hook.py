@@ -55,12 +55,14 @@ _reload_config()
 # ── Record count limit per script run ──
 _record_count = 0
 _MAX_RECORDS_PER_SCRIPT = 5000
+_record_lock = threading.RLock()
 
 
 def _reset_record_count():
     """Reset record counter — called from script_runner at start of each run."""
     global _record_count
-    _record_count = 0
+    with _record_lock:
+        _record_count = 0
 
 
 def _get_proxy_dict():
@@ -99,17 +101,18 @@ def _send_record(record):
     global _record_count
     if not _CFG['record_requests']:
         return
-    _record_count += 1
-    if _record_count > _MAX_RECORDS_PER_SCRIPT:
-        if _record_count == _MAX_RECORDS_PER_SCRIPT + 1:
-            try:
-                print(f"__HTTP_RECORD__{{\"note\": \"HTTP 记录已达上限 {_MAX_RECORDS_PER_SCRIPT} 条\"}}", flush=True)
-            except Exception:
-                pass
-        return
     try:
-        payload = json.dumps(record, ensure_ascii=False, default=str)
-        print(f"__HTTP_RECORD__{payload}", flush=True)
+        with _record_lock:
+            _record_count += 1
+            if _record_count > _MAX_RECORDS_PER_SCRIPT + 1:
+                return
+            if _record_count == _MAX_RECORDS_PER_SCRIPT + 1:
+                payload = json.dumps({'note': f'HTTP 记录已达上限 {_MAX_RECORDS_PER_SCRIPT} 条'}, ensure_ascii=False)
+            else:
+                payload = json.dumps(record, ensure_ascii=False, default=str)
+            # Keep each record and its newline together on the shared stream.
+            sys.stdout.write(f"__HTTP_RECORD__{payload}\n")
+            sys.stdout.flush()
     except Exception:
         pass
 

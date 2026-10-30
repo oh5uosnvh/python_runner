@@ -756,7 +756,7 @@ extension _ScriptListActions on _ScriptListPageState {
   void _openConsole(String name) {
     Navigator.push(
       context,
-      AppPageTransitions.fadeThrough(RunConsolePage(scriptName: name)),
+      AppPageTransitions.terminal(RunConsolePage(scriptName: name)),
     );
   }
 
@@ -1007,7 +1007,7 @@ extension _ScriptListActions on _ScriptListPageState {
       if (mounted) {
         Navigator.push(
           context,
-          AppPageTransitions.fadeThrough(RunConsolePage(scriptName: name)),
+          AppPageTransitions.terminal(RunConsolePage(scriptName: name)),
         );
       }
     } catch (e) {

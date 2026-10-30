@@ -304,7 +304,7 @@ class _ProjectFileEditorPageState extends ConsumerState<ProjectFileEditorPage> {
       if (!mounted) return;
       Navigator.push(
         context,
-        AppPageTransitions.scaleIn(
+        AppPageTransitions.terminal(
           RunConsolePage(
             scriptName: widget.group.name,
             projectGroup: widget.group,
@@ -495,7 +495,7 @@ class _ProjectFileEditorPageState extends ConsumerState<ProjectFileEditorPage> {
                 case 'console':
                   Navigator.push(
                     context,
-                    AppPageTransitions.fadeThrough(
+                    AppPageTransitions.terminal(
                       RunConsolePage(
                         scriptName: widget.group.name,
                         projectGroup: widget.group,

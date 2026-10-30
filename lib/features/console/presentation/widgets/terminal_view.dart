@@ -297,7 +297,10 @@ class TerminalViewState extends State<TerminalView> {
   void _onScroll() {
     if (_jumpingToTop || !_scrollController.hasClients) return;
     final pos = _scrollController.position;
-    if (pos.userScrollDirection != ScrollDirection.idle) ++_scrollRequest;
+    // Layout changes and programmatic jumps must not disable follow when
+    // freshly appended output temporarily increases extentAfter.
+    if (pos.userScrollDirection == ScrollDirection.idle) return;
+    ++_scrollRequest;
     final atBottom = pos.extentAfter <= 60;
     final follow = atBottom && _autoFollowEnabled;
     if (_autoScroll == follow && (!atBottom || !_hasUnreadOutput)) return;

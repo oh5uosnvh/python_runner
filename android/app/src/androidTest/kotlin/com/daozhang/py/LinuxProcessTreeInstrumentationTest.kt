@@ -130,7 +130,7 @@ class LinuxProcessTreeInstrumentationTest {
         val files = listOf(inputScript, timeoutScript, outputScript, shutdownScript)
             .map { store.safeScriptFile(it) }
         try {
-            store.safeScriptFile(inputScript).writeText("value = input('device prompt: '); print('received:' + value)")
+            store.safeScriptFile(inputScript).writeText("import time\nvalue = input('device prompt: ')\nprint('received:' + value)\ntime.sleep(4)\n")
             store.safeScriptFile(timeoutScript).writeText("import time; time.sleep(30)")
             store.safeScriptFile(outputScript).writeText(
                 "for _ in range(320): print('x' * 1024)\nraise RuntimeError('expected instrumentation failure')"
@@ -145,8 +145,12 @@ class LinuxProcessTreeInstrumentationTest {
             )
             assertTrue("stdin request was not emitted", inputProbe.stdin.await(15, TimeUnit.SECONDS))
             inputController.sendLinuxLikeStdin(inputExecutionId, "answer", ResultProbe())
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3)
+            while (System.nanoTime() < deadline && inputProbe.logs.none { it.contains("received:answer") }) {
+                Thread.sleep(25)
+            }
+            assertTrue("output was buffered until process exit", inputProbe.logs.any { it.contains("received:answer") })
             assertEquals("completed", inputProbe.awaitTerminal())
-            assertTrue("stdin value was not written to stdout", inputProbe.logs.any { it.contains("received:answer") })
 
             val timeoutProbe = ExecutionProbe()
             controller(context, runtime, timeoutProbe).executeLinuxLikeScript(

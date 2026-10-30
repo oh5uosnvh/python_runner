@@ -386,6 +386,7 @@ class LinuxLikeRuntimeManager(private val context: Context) {
     ) {
         add(pythonGuestPath)
         add("-B")
+        add("-u")
         add("-c")
         val hooksDirLiteral = toPythonStringLiteral(hooksDir.absolutePath)
         val scriptPathLiteral = toPythonStringLiteral(scriptPath)

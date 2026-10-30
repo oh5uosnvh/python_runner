@@ -22,6 +22,20 @@ void main() {
     );
   });
 
+  testWidgets('auto-follow stays at the tail after repeated output updates',
+      (tester) async {
+    var count = 100;
+    Widget view() => _app(TerminalView(logs: _logs(count), logVersion: count));
+    await tester.pumpWidget(view());
+    await tester.pumpAndSettle();
+    for (final next in [150, 220, 350]) {
+      count = next;
+      await tester.pumpWidget(view());
+      await tester.pumpAndSettle();
+      expect(_position(tester).extentAfter, lessThan(2));
+    }
+  });
+
   testWidgets(
     'bottom reaches the last virtualized line with varying row heights',
     (tester) async {

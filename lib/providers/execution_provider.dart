@@ -368,23 +368,6 @@ class ExecutionProvider extends ChangeNotifier {
     }
   }
 
-  bool _isCurrentExecutionState(ExecutionState state) {
-    final nextExecutionId = state.executionId;
-    final activeExecutionId = _state.executionId;
-    if (nextExecutionId != null &&
-        activeExecutionId != null &&
-        nextExecutionId != activeExecutionId) {
-      return false;
-    }
-    if (nextExecutionId == null &&
-        activeExecutionId != null &&
-        (_state.status == ExecutionStatus.running ||
-            _state.status == ExecutionStatus.stopping)) {
-      return false;
-    }
-    return true;
-  }
-
   void _selectRuntimeManager(String backendId) {
     if (_runtimeManagerLocked) return;
     final nextManager = RuntimeManager.fromPreferredBackend(_bridge, backendId);

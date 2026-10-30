@@ -993,12 +993,11 @@ extension _ScriptListActions on _ScriptListPageState {
       final execProvider = legacy_provider.Provider.of<ExecutionProvider>(
           context,
           listen: false);
-      if (execProvider.isRunning) {
-        _openConsole(execProvider.currentScriptName ?? name);
+      if (execProvider.isScriptRunning(name)) {
+        _openConsole(name);
         return;
       }
       await scriptProvider.incrementRunCount(name);
-      execProvider.clearLogs();
       await execProvider.executeScript(name);
       if (mounted) {
         Navigator.push(

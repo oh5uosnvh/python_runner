@@ -139,11 +139,12 @@ class LinuxProcessTreeInstrumentationTest {
 
             val inputProbe = ExecutionProbe()
             val inputController = controller(context, runtime, inputProbe)
+            val inputExecutionId = "stdin-${System.nanoTime()}"
             inputController.executeLinuxLikeScript(
-                inputScript, "stdin-${System.nanoTime()}", null, null, 10, null, null, ResultProbe()
+                inputScript, inputExecutionId, null, null, 10, null, null, ResultProbe()
             )
             assertTrue("stdin request was not emitted", inputProbe.stdin.await(15, TimeUnit.SECONDS))
-            inputController.sendLinuxLikeStdin("answer", ResultProbe())
+            inputController.sendLinuxLikeStdin(inputExecutionId, "answer", ResultProbe())
             assertEquals("completed", inputProbe.awaitTerminal())
             assertTrue("stdin value was not written to stdout", inputProbe.logs.any { it.contains("received:answer") })
 

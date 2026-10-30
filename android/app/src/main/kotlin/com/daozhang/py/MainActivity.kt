@@ -477,9 +477,13 @@ class MainActivity : FlutterActivity() {
                     result
                 )
             },
-            "stopExecution" to { _, result -> scriptExecutionController.stopExecution(result) },
+            "stopExecution" to { call, result ->
+                scriptExecutionController.stopExecution(call.argument<String>("executionId") ?: "", result)
+            },
             "sendStdin" to { call, result ->
-                scriptExecutionController.sendStdin(call.argument<String>("input") ?: "", result)
+                scriptExecutionController.sendStdin(
+                    call.argument<String>("executionId") ?: "",
+                    call.argument<String>("input") ?: "", result)
             },
             "installPackage" to { call, result ->
                 chaquopyPackageController.installPackage(
@@ -592,12 +596,14 @@ class MainActivity : FlutterActivity() {
             },
             "sendLinuxLikeStdin" to { call, result ->
                 scriptExecutionController.sendLinuxLikeStdin(
+                    call.argument<String>("executionId") ?: "",
                     call.argument<String>("input") ?: "",
                     result
                 )
             },
-            "stopLinuxLikeExecution" to { _, result ->
-                scriptExecutionController.stopLinuxLikeExecution(result)
+            "stopLinuxLikeExecution" to { call, result ->
+                scriptExecutionController.stopLinuxLikeExecution(
+                    call.argument<String>("executionId") ?: "", result)
             },
             "installLinuxLikePackage" to { call, result ->
                 linuxLikePackageController.installLinuxLikePackage(

@@ -27,6 +27,8 @@ class ScriptLogRecord {
   List<LogEntry>? _logsSnapshot;
   ExecutionStatus status;
   int? exitCode;
+  bool waitingForInput = false;
+  String inputPrompt = '';
   int droppedLogCount = 0;
 
   ScriptLogRecord({
@@ -157,6 +159,42 @@ class ExecutionProvider extends ChangeNotifier {
   bool get isRunning =>
       _state.status == ExecutionStatus.running ||
       _state.status == ExecutionStatus.stopping;
+
+  bool isScriptRunning(String scriptName) {
+    final normalized = scriptName.endsWith('.py') ? scriptName : '$scriptName.py';
+    return _logHistory.any((record) =>
+        (record.scriptName == scriptName || record.scriptName == normalized) &&
+        (record.status == ExecutionStatus.running ||
+            record.status == ExecutionStatus.stopping));
+  }
+
+  bool isScriptWaitingForInput(String scriptName) =>
+      activeRecordForScript(scriptName)?.waitingForInput ?? false;
+
+  ScriptLogRecord? activeRecordForScript(String scriptName) {
+    for (var i = _logHistory.length - 1; i >= 0; i--) {
+      final record = _logHistory[i];
+      if (record.scriptName == scriptName &&
+          (record.status == ExecutionStatus.running ||
+              record.status == ExecutionStatus.stopping)) {
+        return record;
+      }
+    }
+    return null;
+  }
+
+  List<LogEntry> logsForScript(String scriptName) =>
+      activeRecordForScript(scriptName)?.logs ??
+      latestHistoryRecordForScript(scriptName)?.logs ??
+      const <LogEntry>[];
+
+  Future<void> stopScript(String scriptName) async {
+    final record = activeRecordForScript(scriptName);
+    if (record == null) return;
+    record.status = ExecutionStatus.stopping;
+    notifyListeners();
+    await _runtimeManager.stopExecution(record.executionId);
+  }
   bool get waitingForInput => _waitingForInput;
   String get currentInputPrompt => _currentInputPrompt;
   int get inputRequestRevision => _inputRequestRevision;
@@ -251,8 +289,9 @@ class ExecutionProvider extends ChangeNotifier {
           return;
         }
 
-        final routedRecord = _historyRecordForExecutionId(entry.executionId) ??
-            _activeHistoryRecord();
+        final routedRecord = entry.executionId == null
+            ? _activeHistoryRecord()
+            : _historyRecordForExecutionId(entry.executionId);
         _appendLiveLog(entry, routedRecord: routedRecord);
         // High-frequency log streams — throttle notifications
         _scheduleNotify();
@@ -265,25 +304,27 @@ class ExecutionProvider extends ChangeNotifier {
 
     try {
       _statusSub = _runtimeManager.stateStream.listen((state) {
-        if (!_isCurrentExecutionState(state)) {
-          return;
-        }
-        _state = state;
-        final isTerminal = _state.status != ExecutionStatus.running &&
-            _state.status != ExecutionStatus.stopping;
-        if (isTerminal) {
-          final record = _historyRecordForExecutionId(_state.executionId) ??
-              (_logHistory.isNotEmpty ? _logHistory.last : null);
-          if (record != null) {
-            record.status = _state.status;
-            record.exitCode = _state.exitCode;
+        final record = _historyRecordForExecutionId(state.executionId);
+        final isTerminal = state.status != ExecutionStatus.running &&
+            state.status != ExecutionStatus.stopping;
+        if (record != null) {
+          record.status = state.status;
+          record.exitCode = state.exitCode;
+          if (isTerminal) {
+            record.waitingForInput = false;
+            record.inputPrompt = '';
           }
         }
-        if (isTerminal) {
-          _waitingForInput = false;
-          _currentInputPrompt = '';
-          _freezeCurrentLogView(_state.executionId);
-          unawaited(HttpInspectorStore.instance.flush());
+        // Only the selected/current task owns the legacy single-console state.
+        if (state.executionId == _state.executionId ||
+            _state.executionId == null) {
+          _state = state;
+          if (isTerminal) {
+            _waitingForInput = false;
+            _currentInputPrompt = '';
+            _freezeCurrentLogView(state.executionId);
+            unawaited(HttpInspectorStore.instance.flush());
+          }
         }
         _scheduleNotify();
       }, onError: (e) {
@@ -296,27 +337,24 @@ class ExecutionProvider extends ChangeNotifier {
 
     try {
       _stdinSub = _runtimeManager.stdinRequestStream.listen((request) {
-        final activeExecutionId = _state.executionId;
-        if (_state.status != ExecutionStatus.running &&
-            _state.status != ExecutionStatus.stopping) {
-          return;
-        }
-        if (request.executionId != null &&
-            activeExecutionId != null &&
-            request.executionId != activeExecutionId) {
-          return;
-        }
-        _currentInputPrompt = request.prompt;
-        _inputRequestRevision++;
-        if (_currentInputPrompt.isNotEmpty) {
-          final entry = LogEntry(
+        final id = request.executionId;
+        final record = _historyRecordForExecutionId(id);
+        if (record == null) return;
+        record.waitingForInput = true;
+        record.inputPrompt = request.prompt;
+        if (request.prompt.isNotEmpty) {
+          record.appendLog(LogEntry(
             type: LogType.stdout,
-            content: _currentInputPrompt,
+            content: request.prompt,
             timestamp: DateTime.now(),
-          );
-          _appendLiveLog(entry);
+            executionId: id,
+          ), maxItems: maxLogsPerHistoryRecord);
         }
-        _waitingForInput = true;
+        if (id == _state.executionId) {
+          _currentInputPrompt = request.prompt;
+          _inputRequestRevision++;
+          _waitingForInput = true;
+        }
         _scheduleNotify();
       }, onError: (e) {
         _logger.error('stdinRequestStream error: $e', source: 'Execution');
@@ -361,7 +399,7 @@ class ExecutionProvider extends ChangeNotifier {
   Future<void> onBackendChanged(String backendId) async {
     if (_state.status == ExecutionStatus.running ||
         _state.status == ExecutionStatus.stopping) {
-      await _runtimeManager.stopExecution();
+      await _runtimeManager.stopExecution(_state.executionId ?? '');
     }
     _selectRuntimeManager(backendId);
   }
@@ -591,30 +629,7 @@ class ExecutionProvider extends ChangeNotifier {
     // run are then rejected by [_isCurrentExecutionState] instead of mutating
     // the freshly started run.
     final executionId = _nextExecutionId();
-    // If a previous execution is still marked as running, clean it up
-    if (_state.status == ExecutionStatus.running) {
-      final previousRecord = _activeHistoryRecord();
-      _state = ExecutionState(
-        executionId: executionId,
-        status: ExecutionStatus.stopping,
-      );
-      try {
-        await _runtimeManager.stopExecution();
-      } catch (e, stackTrace) {
-        _logger.warn(
-          '停止上一轮执行失败: $e',
-          source: 'Execution',
-          detail: stackTrace.toString(),
-        );
-      }
-      if (previousRecord != null) {
-        previousRecord.status = ExecutionStatus.stopped;
-        previousRecord.exitCode = 0;
-      }
-    }
-
     _currentScriptName = safeName;
-    _clearCurrentLogs();
     _waitingForInput = false;
     _currentInputPrompt = '';
     _state = ExecutionState(
@@ -719,29 +734,7 @@ class ExecutionProvider extends ChangeNotifier {
     final displayName = group.name.trim().isEmpty ? projectKey : group.name;
     final executionId = _nextExecutionId();
 
-    if (_state.status == ExecutionStatus.running) {
-      final previousRecord = _activeHistoryRecord();
-      _state = ExecutionState(
-        executionId: executionId,
-        status: ExecutionStatus.stopping,
-      );
-      try {
-        await _runtimeManager.stopExecution();
-      } catch (e, stackTrace) {
-        _logger.warn(
-          '停止上一轮项目执行失败: $e',
-          source: 'Execution',
-          detail: stackTrace.toString(),
-        );
-      }
-      if (previousRecord != null) {
-        previousRecord.status = ExecutionStatus.stopped;
-        previousRecord.exitCode = 0;
-      }
-    }
-
     _currentScriptName = displayName;
-    _clearCurrentLogs();
     _waitingForInput = false;
     _currentInputPrompt = '';
     _state = ExecutionState(
@@ -851,7 +844,7 @@ class ExecutionProvider extends ChangeNotifier {
     // Consume this prompt before yielding. UI and MCP share this reservation.
     _waitingForInput = false;
     try {
-      await _runtimeManager.sendStdin(input);
+      await _runtimeManager.sendStdin(executionId ?? '', input);
       // A fast script may already have emitted its next input prompt or exited.
       // Never clear that newer prompt or append this echo to a different run.
       if (_disposed ||
@@ -894,6 +887,36 @@ class ExecutionProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> sendStdinForScript(String scriptName, String input) async {
+    final record = activeRecordForScript(scriptName);
+    if (record == null) return;
+    final prompt = record.inputPrompt;
+    record.waitingForInput = false;
+    record.inputPrompt = '';
+    await _runtimeManager.sendStdin(record.executionId, input);
+    final echoed = prompt.isEmpty ? '> $input' : '$prompt$input';
+    record.appendLog(LogEntry(
+      type: LogType.info,
+      content: echoed,
+      timestamp: DateTime.now(),
+      executionId: record.executionId,
+    ), maxItems: maxLogsPerHistoryRecord);
+    if (_state.executionId == record.executionId) {
+      _waitingForInput = false;
+      _currentInputPrompt = '';
+    }
+    notifyListeners();
+  }
+
+  void clearLogsForScript(String scriptName) {
+    final record = activeRecordForScript(scriptName) ??
+        latestHistoryRecordForScript(scriptName);
+    if (record == null) return;
+    record._logs.clear();
+    record._logsSnapshot = null;
+    notifyListeners();
+  }
+
   Future<void> stopExecution() async {
     try {
       if (_state.status == ExecutionStatus.running) {
@@ -904,7 +927,7 @@ class ExecutionProvider extends ChangeNotifier {
         }
         notifyListeners();
       }
-      await _runtimeManager.stopExecution();
+      await _runtimeManager.stopExecution(_state.executionId ?? '');
       _logger.info('脚本执行已停止', source: 'Execution');
     } catch (e) {
       _logger.error('stopExecution error: $e', source: 'Execution');

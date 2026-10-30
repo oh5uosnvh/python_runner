@@ -477,7 +477,7 @@ class _ProjectFileEditorPageState extends ConsumerState<ProjectFileEditorPage> {
             IconButton(
               icon: Icon(isThisProjectRunning ? Icons.stop : Icons.play_arrow),
               onPressed: isThisProjectRunning
-                  ? () => context.read<ExecutionProvider>().stopExecution()
+                  ? () => context.read<ExecutionProvider>().stopScript(widget.group.name)
                   : _runProject,
               tooltip: isThisProjectRunning ? l10n.stop : l10n.runProject,
             ),

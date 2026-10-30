@@ -354,7 +354,7 @@ class _FakeNativeBridge extends NativeBridge {
   }
 
   @override
-  Future<void> stopExecution() async {}
+  Future<void> stopExecution(String executionId) async {}
 
   @override
   Future<void> executeScript(
@@ -366,7 +366,7 @@ class _FakeNativeBridge extends NativeBridge {
   }) async {}
 
   @override
-  Future<void> sendStdin(String input) async {}
+  Future<void> sendStdin(String executionId, String input) async {}
 }
 
 class _FakeDatabaseService extends DatabaseService {

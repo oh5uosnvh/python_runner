@@ -36,11 +36,17 @@ abstract class RuntimeBackend {
   /// Starts a script or project execution and returns a controllable session.
   Future<RuntimeSession> startScript(RuntimeRequest request);
 
-  /// Sends a single stdin line to the active process when supported.
+  /// Legacy backend-wide stdin operation.
   Future<void> sendStdin(String input);
 
-  /// Requests termination of the active process.
+  /// Legacy backend-wide termination operation.
   Future<void> stopExecution();
+
+  /// ID-aware operation used by concurrent execution managers.
+  Future<void> sendStdinFor(String executionId, String input) => sendStdin(input);
+
+  /// ID-aware termination used by concurrent execution managers.
+  Future<void> stopExecutionFor(String executionId) => stopExecution();
 
   /// Installs one package in this runtime.
   Future<PackageInstallResult> installPackage(PackageInstallRequest request);

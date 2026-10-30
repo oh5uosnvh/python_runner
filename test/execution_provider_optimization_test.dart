@@ -454,9 +454,9 @@ class _ExecutionBridgeFake extends NativeBridge {
   }
 
   @override
-  Future<void> stopExecution() async {}
+  Future<void> stopExecution(String executionId) async {}
 
   @override
-  Future<void> sendStdin(String input) async {}
+  Future<void> sendStdin(String executionId, String input) async {}
 
 }

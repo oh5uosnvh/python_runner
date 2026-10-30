@@ -19,7 +19,7 @@ class MenuBridge extends FakeScriptNativeBridge {
       {'available': 'true', 'installed': 'true'};
 
   @override
-  Future<void> stopLinuxLikeExecution() async {}
+  Future<void> stopLinuxLikeExecution(String executionId) async {}
   final inputs = <String>[];
   final backends = <String>[];
   Future<void> Function()? onInput;
@@ -39,9 +39,11 @@ class MenuBridge extends FakeScriptNativeBridge {
   }
 
   @override
-  Future<void> sendStdin(String input) => accept('chaquopy', input);
+  Future<void> sendStdin(String executionId, String input) =>
+      accept('chaquopy', input);
   @override
-  Future<void> sendLinuxLikeStdin(String input) => accept('linux_like', input);
+  Future<void> sendLinuxLikeStdin(String executionId, String input) =>
+      accept('linux_like', input);
 }
 
 void main() {

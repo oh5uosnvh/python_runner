@@ -437,7 +437,7 @@ class _ScriptEditorPageState extends ConsumerState<ScriptEditorPage> {
           IconButton(
             icon: Icon(isThisRunning ? Icons.stop : Icons.play_arrow),
             onPressed: isThisRunning
-                ? () => context.read<ExecutionProvider>().stopExecution()
+                ? () => context.read<ExecutionProvider>().stopScript(widget.scriptName)
                 : _run,
             tooltip: isThisRunning ? l10n.stop : l10n.run,
           ),

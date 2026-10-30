@@ -63,7 +63,6 @@ class _RunConsolePageState extends ConsumerState<RunConsolePage>
       final exec = context.read<ExecutionProvider>();
       final scriptWorkspace =
           ref.read(scriptWorkspaceControllerProvider.notifier);
-      exec.clearLogs();
       final projectGroup = widget.projectGroup;
       if (projectGroup != null && projectGroup.isProject) {
         await exec.executeScriptProject(projectGroup);
@@ -166,14 +165,11 @@ class _RunConsoleAppBar extends StatelessWidget implements PreferredSizeWidget {
     final l10n = AppLocalizations.of(context)!;
     final colors = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final currentScriptName = context.select<ExecutionProvider, String?>(
-      (p) => p.currentScriptName,
-    );
     final providerIsRunning = context.select<ExecutionProvider, bool>(
-      (p) => p.isRunning,
+      (p) => p.isScriptRunning(scriptName),
     );
     final waiting = context.select<ExecutionProvider, bool>(
-      (p) => p.waitingForInput,
+      (p) => p.isScriptWaitingForInput(scriptName),
     );
     final providerStatus = context.select<ExecutionProvider, ExecutionStatus>(
       (p) => p.state.status,
@@ -183,10 +179,9 @@ class _RunConsoleAppBar extends StatelessWidget implements PreferredSizeWidget {
           scriptName,
         ) ??
         executionProvider.latestHistoryRecordForScript(scriptName);
-    final isRunning = providerIsRunning && currentScriptName == scriptName;
-    final status = isRunning
-        ? providerStatus
-        : (selectedRecord?.status ?? ExecutionStatus.idle);
+    final isRunning = providerIsRunning;
+    final status = selectedRecord?.status ??
+        (isRunning ? providerStatus : ExecutionStatus.idle);
     final selectedWaiting = isRunning ? waiting : false;
 
     final statusText = isRunning
@@ -259,7 +254,7 @@ class _RunConsoleAppBar extends StatelessWidget implements PreferredSizeWidget {
         if (isRunning)
           IconButton(
             icon: Icon(Icons.stop_rounded, color: colors.error, size: 22),
-            onPressed: () => context.read<ExecutionProvider>().stopExecution(),
+            onPressed: () => context.read<ExecutionProvider>().stopScript(scriptName),
             tooltip: l10n.stop,
           )
         else
@@ -332,21 +327,14 @@ class _RunConsoleTerminalPane extends ConsumerWidget {
     final displayPreferences = ref.watch(consoleDisplayPreferencesProvider);
     return Selector<ExecutionProvider, _TerminalSnapshot>(
       selector: (context, execution) {
-        final isRunning =
-            execution.isRunning && execution.currentScriptName == scriptName;
-        final selectedRecord = isRunning
-            ? execution.historyRecordForScriptExecution(scriptName) ??
-                execution.latestHistoryRecordForScript(scriptName)
-            : execution.latestHistoryRecordForScript(scriptName);
+        final isRunning = execution.isScriptRunning(scriptName);
+        final selectedRecord = execution.activeRecordForScript(scriptName) ??
+            execution.latestHistoryRecordForScript(scriptName);
         return _TerminalSnapshot(
-          logs: isRunning
-              ? execution.logs
-              : (selectedRecord?.logs ?? const <LogEntry>[]),
+          logs: execution.logsForScript(scriptName),
           isRunning: isRunning,
-          waitingForInput: isRunning && execution.waitingForInput,
-          logVersion: isRunning
-              ? execution.logVersion
-              : (selectedRecord?.logs.length ?? 0),
+          waitingForInput: execution.isScriptWaitingForInput(scriptName),
+          logVersion: selectedRecord?.logCount ?? 0,
         );
       },
       builder: (context, snapshot, _) {
@@ -357,9 +345,9 @@ class _RunConsoleTerminalPane extends ConsumerWidget {
             isRunning: snapshot.isRunning,
             waitingForInput: snapshot.waitingForInput,
             onStdin: (input) =>
-                context.read<ExecutionProvider>().sendStdin(input),
+                context.read<ExecutionProvider>().sendStdinForScript(scriptName, input),
             onClear: snapshot.isRunning
-                ? () => context.read<ExecutionProvider>().clearLogs()
+                ? () => context.read<ExecutionProvider>().clearLogsForScript(scriptName)
                 : null,
             onExport: onExport,
             autoFollowInitiallyEnabled: displayPreferences.autoFollowOutput,

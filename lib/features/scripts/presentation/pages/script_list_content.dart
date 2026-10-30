@@ -186,6 +186,7 @@ extension _ScriptListContent on _ScriptListPageState {
               return _ScriptGridCard(
                 key: ValueKey('sliver_script_grid_${script.name}'),
                 name: _displayScriptName(script.name, index),
+                scriptName: script.name,
                 masked: _maskScriptNames,
                 modifiedAt: script.modifiedAt,
                 runCount: script.runCount,
@@ -202,6 +203,8 @@ extension _ScriptListContent on _ScriptListPageState {
             }
 
             final colors = Theme.of(context).colorScheme;
+            final isRunning = legacy_provider.Provider.of<ExecutionProvider>(context)
+                .isScriptRunning(script.name);
             return _ScriptCardSurface(
               key: ValueKey('sliver_script_${script.name}'),
               colors: colors,
@@ -230,10 +233,20 @@ extension _ScriptListContent on _ScriptListPageState {
                           ),
                         )
                       else
-                        _ScriptIcon(
-                          colors: colors,
-                          size: 44,
-                          pinned: script.isPinned,
+                        Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            _ScriptIcon(
+                              colors: colors,
+                              size: 44,
+                              pinned: script.isPinned,
+                            ),
+                            Positioned(
+                              left: -3,
+                              top: -3,
+                              child: _ScriptRunningDot(script.name),
+                            ),
+                          ],
                         ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -533,6 +546,7 @@ extension _ScriptListContent on _ScriptListPageState {
           return _ScriptGridCard(
             key: feedback ? null : ValueKey('home_script_grid_${script.name}'),
             name: _displayScriptName(script.name, index),
+            scriptName: script.name,
             masked: _maskScriptNames,
             modifiedAt: script.modifiedAt,
             runCount: script.runCount,
@@ -813,6 +827,7 @@ extension _ScriptListContent on _ScriptListPageState {
       return _ScriptGridCard(
         key: ValueKey('script_grid_static_${script.name}'),
         name: _displayScriptName(script.name, index),
+        scriptName: script.name,
         masked: _maskScriptNames,
         modifiedAt: script.modifiedAt,
         runCount: script.runCount,
@@ -896,6 +911,7 @@ extension _ScriptListContent on _ScriptListPageState {
         return _ScriptGridCard(
           key: feedback ? null : ValueKey('script_grid_${slotScript.name}'),
           name: _displayScriptName(displayScript.name, index),
+          scriptName: displayScript.name,
           masked: _maskScriptNames,
           modifiedAt: displayScript.modifiedAt,
           runCount: displayScript.runCount,

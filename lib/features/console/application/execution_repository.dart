@@ -123,10 +123,10 @@ class RuntimeExecutionRepository implements ExecutionRepository {
       _runtimeManager.startScript(request);
 
   @override
-  Future<void> sendStdin(String input) => _runtimeManager.sendStdin(input);
+  Future<void> sendStdin(String input) => _runtimeManager.sendStdin('', input);
 
   @override
-  Future<void> stopExecution() => _runtimeManager.stopExecution();
+  Future<void> stopExecution() => _runtimeManager.stopExecution('');
 
   @override
   Future<RuntimeHealth> checkHealth() {

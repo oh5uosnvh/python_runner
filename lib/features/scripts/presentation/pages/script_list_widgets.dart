@@ -216,6 +216,7 @@ class _ScriptFolderCard extends StatelessWidget {
 
 class _ScriptGridCard extends StatelessWidget {
   final String name;
+  final String? scriptName;
   final bool masked;
   final DateTime modifiedAt;
   final int runCount;
@@ -230,6 +231,7 @@ class _ScriptGridCard extends StatelessWidget {
   const _ScriptGridCard({
     super.key,
     required this.name,
+    this.scriptName,
     required this.masked,
     required this.modifiedAt,
     required this.runCount,
@@ -248,6 +250,8 @@ class _ScriptGridCard extends StatelessWidget {
     final displayName = name.replaceAll('.py', '');
     final l10n = AppLocalizations.of(context)!;
     final runLabel = runCount > 0 ? l10n.runsCount(runCount) : l10n.notRun;
+    final isRunning = legacy_provider.Provider.of<ExecutionProvider>(context)
+        .isScriptRunning(scriptName ?? name);
 
     return _ScriptCardSurface(
       colors: colors,
@@ -264,6 +268,12 @@ class _ScriptGridCard extends StatelessWidget {
           onLongPress: onLongPress,
           child: Stack(
             children: [
+              if (isRunning)
+                const Positioned(
+                  left: 8,
+                  top: 8,
+                  child: _RunningScriptDot(),
+                ),
               Padding(
                 padding: const EdgeInsets.all(12),
                 child: Column(
@@ -852,6 +862,39 @@ class _PinnedBadge extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ScriptRunningDot extends StatelessWidget {
+  final String scriptName;
+  const _ScriptRunningDot(this.scriptName);
+
+  @override
+  Widget build(BuildContext context) {
+    final running = legacy_provider.Provider.of<ExecutionProvider>(context)
+        .isScriptRunning(scriptName);
+    return running ? const _RunningScriptDot() : const SizedBox.shrink();
+  }
+}
+
+class _RunningScriptDot extends StatelessWidget {
+  const _RunningScriptDot();
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: 10,
+        height: 10,
+        decoration: BoxDecoration(
+          color: Colors.greenAccent,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.greenAccent.withValues(alpha: 0.72),
+              blurRadius: 5,
+              spreadRadius: 1,
+            ),
+          ],
+        ),
+      );
 }
 
 class _QuickRunButton extends StatefulWidget {

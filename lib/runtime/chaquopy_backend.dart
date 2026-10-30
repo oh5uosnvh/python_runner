@@ -62,13 +62,19 @@ class ChaquopyBackend implements RuntimeBackend {
   }
 
   @override
-  Future<void> sendStdin(String input) {
-    return _bridge.sendStdin(input);
+  Future<void> sendStdin(String input) => sendStdinFor('', input);
+
+  @override
+  Future<void> sendStdinFor(String executionId, String input) {
+    return _bridge.sendStdin(executionId, input);
   }
 
   @override
-  Future<void> stopExecution() {
-    return _bridge.stopExecution();
+  Future<void> stopExecution() => stopExecutionFor('');
+
+  @override
+  Future<void> stopExecutionFor(String executionId) {
+    return _bridge.stopExecution(executionId);
   }
 
   @override
@@ -174,7 +180,7 @@ class ChaquopyRuntimeSession implements RuntimeSession {
 
   @override
   Future<void> writeStdin(String data) {
-    return backend.sendStdin(data);
+    return backend.sendStdinFor(request.executionId, data);
   }
 
   @override
@@ -184,7 +190,7 @@ class ChaquopyRuntimeSession implements RuntimeSession {
 
   @override
   Future<void> terminate() {
-    return backend.stopExecution();
+    return backend.stopExecutionFor(request.executionId);
   }
 
   @override

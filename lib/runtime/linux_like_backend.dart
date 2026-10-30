@@ -78,17 +78,23 @@ class LinuxLikeBackend implements RuntimeBackend {
   }
 
   @override
-  Future<void> sendStdin(String input) async {
+  Future<void> sendStdin(String input) => sendStdinFor('', input);
+
+  @override
+  Future<void> sendStdinFor(String executionId, String input) async {
     final bridge = _bridge;
     if (bridge == null) return;
-    await bridge.sendLinuxLikeStdin(input);
+    await bridge.sendLinuxLikeStdin(executionId, input);
   }
 
   @override
-  Future<void> stopExecution() async {
+  Future<void> stopExecution() => stopExecutionFor('');
+
+  @override
+  Future<void> stopExecutionFor(String executionId) async {
     final bridge = _bridge;
     if (bridge == null) return;
-    await bridge.stopLinuxLikeExecution();
+    await bridge.stopLinuxLikeExecution(executionId);
   }
 
   @override
@@ -301,7 +307,7 @@ class LinuxLikeRuntimeSession implements RuntimeSession {
 
   @override
   Future<void> writeStdin(String data) {
-    return backend.sendStdin(data);
+    return backend.sendStdinFor(request.executionId, data);
   }
 
   @override
@@ -311,7 +317,7 @@ class LinuxLikeRuntimeSession implements RuntimeSession {
 
   @override
   Future<void> terminate() {
-    return backend.stopExecution();
+    return backend.stopExecutionFor(request.executionId);
   }
 
   @override

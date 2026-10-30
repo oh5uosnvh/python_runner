@@ -211,12 +211,12 @@ class NativeBridge {
     });
   }
 
-  Future<void> stopExecution() async {
-    await _invoke('stopExecution', {});
+  Future<void> stopExecution(String executionId) async {
+    await _invoke('stopExecution', {'executionId': executionId});
   }
 
-  Future<void> sendStdin(String input) async {
-    await _invoke('sendStdin', {'input': input});
+  Future<void> sendStdin(String executionId, String input) async {
+    await _invoke('sendStdin', {'executionId': executionId, 'input': input});
   }
 
   Future<void> installPackage(String packageName,
@@ -608,12 +608,12 @@ class NativeBridge {
     });
   }
 
-  Future<void> sendLinuxLikeStdin(String input) async {
-    await _invoke('sendLinuxLikeStdin', {'input': input});
+  Future<void> sendLinuxLikeStdin(String executionId, String input) async {
+    await _invoke('sendLinuxLikeStdin', {'executionId': executionId, 'input': input});
   }
 
-  Future<void> stopLinuxLikeExecution() async {
-    await _invoke('stopLinuxLikeExecution', {});
+  Future<void> stopLinuxLikeExecution(String executionId) async {
+    await _invoke('stopLinuxLikeExecution', {'executionId': executionId});
   }
 
   Future<void> installLinuxLikePackage(String packageName,

@@ -25,7 +25,7 @@ class RuntimeManager {
   ];
 
   final RuntimeBackend currentBackend;
-  RuntimeSession? _activeSession;
+  final Map<String, RuntimeSession> _sessions = {};
 
   RuntimeManager(this.currentBackend);
 
@@ -115,46 +115,35 @@ class RuntimeManager {
       currentBackend.packageInstallProgressStream;
 
   Future<RuntimeSession> startScript(RuntimeRequest request) async {
-    final previous = _activeSession;
-    _activeSession = null;
-    if (previous != null) {
-      await previous.terminate();
-      // EventChannel cancellation is best effort and must not prevent a new
-      // execution from starting when the old source never closes.
-      unawaited(previous.dispose());
-    }
-
     final session = await currentBackend.startScript(request);
-    _activeSession = session;
+    _sessions[request.executionId] = session;
     unawaited(session.waitExit().whenComplete(() async {
-      if (identical(_activeSession, session)) {
-        _activeSession = null;
+      if (identical(_sessions[request.executionId], session)) {
+        _sessions.remove(request.executionId);
       }
       await session.dispose();
     }));
     return session;
   }
 
-  Future<void> sendStdin(String input) {
-    final session = _activeSession;
-    if (session != null) {
-      return session.writeStdin(input);
-    }
-    return currentBackend.sendStdin(input);
+  Future<void> sendStdin(String executionId, String input) {
+    final session = _sessions[executionId];
+    if (session != null) return session.writeStdin(input);
+    return currentBackend.sendStdinFor(executionId, input);
   }
 
-  Future<void> stopExecution() {
-    final session = _activeSession;
-    if (session != null) {
-      return session.terminate();
-    }
-    return currentBackend.stopExecution();
+  Future<void> stopExecution(String executionId) {
+    final session = _sessions[executionId];
+    if (session != null) return session.terminate();
+    return currentBackend.stopExecutionFor(executionId);
   }
 
   Future<void> dispose() async {
-    final session = _activeSession;
-    _activeSession = null;
-    await session?.dispose();
+    final sessions = List<RuntimeSession>.of(_sessions.values);
+    _sessions.clear();
+    for (final session in sessions) {
+      await session.dispose();
+    }
   }
 
   Future<PackageInstallResult> installPackage(

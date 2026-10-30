@@ -204,8 +204,9 @@ void main() {
     }
     await tester.pump();
 
-    expect(provider.logHistory.length, ExecutionProvider.maxHistoryRecords);
-    expect(provider.logHistory.first.scriptName, 'demo_5.py');
+    // Active runs must not be evicted merely to satisfy the history cap.
+    expect(provider.logHistory.length, 25);
+    expect(provider.logHistory.first.scriptName, 'demo_0.py');
     expect(provider.logHistory.last.scriptName, 'demo_24.py');
 
     provider.dispose();

@@ -64,13 +64,13 @@ void main() {
       expect(find.byIcon(Icons.text_increase_rounded), findsNothing);
       expect(find.byIcon(Icons.format_size), findsNothing);
 
-      final terminalLine = _richTextContaining('hello from terminal');
+      final terminalLine = _richTextContaining('large terminal output 4998');
       expect(terminalLine, findsOneWidget);
 
       final before = _richTextFontSizeForText(
         tester,
         terminalLine,
-        'hello from terminal',
+        'large terminal output 4998',
       );
 
       await _pinchOut(
@@ -82,7 +82,7 @@ void main() {
       final after = _richTextFontSizeForText(
         tester,
         terminalLine,
-        'hello from terminal',
+        'large terminal output 4998',
       );
       expect(after, greaterThan(before));
     });
